@@ -73,10 +73,14 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
     { id: 'contact', label: 'Footer & Networks', icon: Mail },
   ];
 
-  const updateField = (section: keyof SiteData, field: string, value: any) => {
+  const updateField = (section: keyof SiteData, field: string | null, value: any) => {
     setData((prev) => {
       const copy = { ...prev };
-      (copy[section] as any)[field] = value;
+      if (field === null || field === undefined || field === "") {
+        (copy as any)[section] = value;
+      } else {
+        (copy[section] as any)[field] = value;
+      }
       return copy;
     });
     setIsModified(true);
@@ -1689,7 +1693,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
               <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
                 <div>
                   <h4 className="text-xs font-serif font-bold text-slate-800 text-sm border-b pb-2">Archive & Media Section Settings</h4>
-                  <p className="text-xs text-slate-500 mt-1">Manage the historical visual records of fieldwork, research labs, or expeditions. Add up to 10 files (limit: 30MB per file).</p>
+                  <p className="text-xs text-slate-500 mt-1">Manage the historical visual records of fieldwork, research labs, or expeditions. Add files without quantity limits (limit: 30MB per file).</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1732,65 +1736,63 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                 <div className="border-t pt-6">
                   <div className="flex justify-between items-center mb-4">
                     <div>
-                      <h4 className="text-xs font-bold text-slate-700 uppercase">Uploaded Files ({data.archive?.items?.length || 0} / 10)</h4>
+                      <h4 className="text-xs font-bold text-slate-700 uppercase">Uploaded Files ({data.archive?.items?.length || 0})</h4>
                       <p className="text-[10px] text-slate-400">Supported formats: JPG, PNG, GIF, MP4, WebM. (Max 30MB each)</p>
                     </div>
 
-                    {(data.archive?.items?.length || 0) < 10 && (
-                      <div className="relative">
-                        <input
-                          type="file"
-                          id="archive-file-uploader"
-                          accept="image/*,video/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
+                    <div className="relative">
+                      <input
+                        type="file"
+                        id="archive-file-uploader"
+                        accept="image/*,video/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
 
-                            if (file.size > MAX_FILE_SIZE_BYTES) {
-                              showNotification(`File is too large. The size limit is 30MB. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB.`, 'error');
-                              e.target.value = '';
-                              return;
-                            }
+                          if (file.size > MAX_FILE_SIZE_BYTES) {
+                            showNotification(`File is too large. The size limit is 30MB. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB.`, 'error');
+                            e.target.value = '';
+                            return;
+                          }
 
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              const mediaUrl = reader.result as string;
-                              const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
-                              
-                              const arch = { ...(data.archive || { title: "Archive & Field Records", description: "", items: [] }) };
-                              const newItem = {
-                                id: `arch-${Date.now()}`,
-                                name: file.name.replace(/\.[^/.]+$/, ""), // remove extension for cleaner default name
-                                mediaUrl,
-                                mediaType,
-                                fileSize: file.size
-                              };
-                              arch.items = [...arch.items, newItem];
-                              
-                              setData(prev => ({
-                                ...prev,
-                                archive: arch
-                              }));
-                              setIsModified(true);
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            const mediaUrl = reader.result as string;
+                            const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+                            
+                            const arch = { ...(data.archive || { title: "Archive & Field Records", description: "", items: [] }) };
+                            const newItem = {
+                              id: `arch-${Date.now()}`,
+                              name: file.name.replace(/\.[^/.]+$/, ""), // remove extension for cleaner default name
+                              mediaUrl,
+                              mediaType,
+                              fileSize: file.size
                             };
-                            reader.readAsDataURL(file);
-                          }}
-                        />
-                        <label
-                          htmlFor="archive-file-uploader"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ocean-accent text-white rounded text-xs font-semibold hover:bg-ocean-dark transition-colors cursor-pointer"
-                        >
-                          <Upload size={14} />
-                          Upload Photo / Video
-                        </label>
-                      </div>
-                    )}
+                            arch.items = [...arch.items, newItem];
+                            
+                            setData(prev => ({
+                              ...prev,
+                              archive: arch
+                            }));
+                            setIsModified(true);
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                      <label
+                        htmlFor="archive-file-uploader"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ocean-accent text-white rounded text-xs font-semibold hover:bg-ocean-dark transition-colors cursor-pointer"
+                      >
+                        <Upload size={14} />
+                        Upload Photo / Video
+                      </label>
+                    </div>
                   </div>
 
                   {(!data.archive?.items || data.archive.items.length === 0) ? (
                     <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-lg bg-slate-50">
-                      <p className="text-xs text-slate-400">No media uploaded in the archive yet. Click the upload button above to add up to 10 items.</p>
+                      <p className="text-xs text-slate-400">No media uploaded in the archive yet. Click the upload button above to add active items.</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 font-sans">

@@ -112,7 +112,7 @@ export default function App() {
   return (
     <div className="min-h-screen font-sans bg-white text-slate-700 antialiased selection:bg-ocean-accent selection:text-white">
       {/* Dynamic contextual header bar */}
-      <Navbar name="S. Bhattacharjee" />
+      <Navbar name="S. Bhattacharjee Portfolio" />
 
       {/* Main presentation routes */}
       <main>

@@ -12,7 +12,7 @@ export default function LoginModal({ onLogin, onCancel }: LoginModalProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === 'admin') {
+    if (password === 'admin17') {
       onLogin();
     } else {
       setErrorString('Incorrect password. Please try again.');
