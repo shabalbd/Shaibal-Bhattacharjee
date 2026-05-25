@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { INITIAL_DATA } from './initialData';
 import { SiteData } from './types';
+import { saveToIndexedDB, getFromIndexedDB, removeFromIndexedDB } from './utils/db';
 
 // Importing extracted functional modules
 import Navbar from './components/Navbar';
@@ -21,39 +22,68 @@ export default function App() {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
-  // Initialize and load persisted dataset
+  // Initialize and load persisted dataset from IndexedDB (with localStorage migration fallback)
   useEffect(() => {
-    const saved = localStorage.getItem('academic_portfolio_site_data_v3');
-    if (saved) {
+    const initData = async () => {
       try {
-        const parsed = JSON.parse(saved);
-        // Direct type guarding checks
-        if (parsed.hero && parsed.about && parsed.publications) {
+        // 1. Try to load from expanded IndexedDB database first
+        let parsed = await getFromIndexedDB('academic_portfolio_site_data_v4');
+
+        // 2. Migration fallback: If IndexedDB is empty, check old localStorage
+        if (!parsed) {
+          const legacySaved = localStorage.getItem('academic_portfolio_site_data_v3');
+          if (legacySaved) {
+            try {
+              const legacyParsed = JSON.parse(legacySaved);
+              if (legacyParsed && legacyParsed.hero && legacyParsed.about) {
+                parsed = legacyParsed;
+                // Migrate to new storage engine
+                await saveToIndexedDB('academic_portfolio_site_data_v4', parsed);
+                // Clean up old restrictively limited storage block
+                localStorage.removeItem('academic_portfolio_site_data_v3');
+              }
+            } catch (err) {
+              console.warn('Failed to parse previous legacy site data from localStorage.', err);
+            }
+          }
+        }
+
+        if (parsed && parsed.hero && parsed.about && parsed.publications) {
           // Migrate name to Shaibal Bhattacharjee automatically if stored as older initials
           if (parsed.hero.name === "S. Bhattacharjee") {
             parsed.hero.name = "Shaibal Bhattacharjee";
-            localStorage.setItem('academic_portfolio_site_data_v3', JSON.stringify(parsed));
+            await saveToIndexedDB('academic_portfolio_site_data_v4', parsed);
           }
           setData(parsed);
-          return;
+        } else {
+          // Initialize fresh template
+          setData(JSON.parse(JSON.stringify(INITIAL_DATA)));
         }
-      } catch (e) {
-        console.warn('Failed to parse previous site data cache. Reverting to initial templates.', e);
+      } catch (err) {
+        console.error('Error during database initialization:', err);
+        setData(JSON.parse(JSON.stringify(INITIAL_DATA)));
       }
-    }
-    // Load initial boilerplate data if cache represents an empty frame
-    setData(JSON.parse(JSON.stringify(INITIAL_DATA)));
+    };
+
+    initData();
   }, []);
 
-  const handleSaveData = (updatedData: SiteData) => {
-    setData(updatedData);
-    localStorage.setItem('academic_portfolio_site_data_v3', JSON.stringify(updatedData));
+  const handleSaveData = async (updatedData: SiteData): Promise<boolean> => {
+    try {
+      setData(updatedData);
+      const success = await saveToIndexedDB('academic_portfolio_site_data_v4', updatedData);
+      return success;
+    } catch (e) {
+      console.error('Failed to save to browser database:', e);
+      setData(updatedData);
+      return false;
+    }
   };
 
-  const handleResetData = () => {
+  const handleResetData = async () => {
     setData(JSON.parse(JSON.stringify(INITIAL_DATA)));
+    await removeFromIndexedDB('academic_portfolio_site_data_v4');
     localStorage.removeItem('academic_portfolio_site_data_v3');
-    alert('Academic portfolio successfully reset to standard templates.');
   };
 
   if (!data) {

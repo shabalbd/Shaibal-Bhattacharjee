@@ -14,20 +14,38 @@ import {
   Trash2,
   Upload,
   LogOut,
-  Archive
+  Archive,
+  X
 } from 'lucide-react';
 import { SiteData, SkillCategory, PublicationItem, BlogItem, PersonItem } from '../types';
 
 interface AdminPanelProps {
   initialData: SiteData;
-  onSave: (data: SiteData) => void;
+  onSave: (data: SiteData) => Promise<boolean> | boolean;
   onReset: () => void;
   onLogout: () => void;
 }
 
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_FILE_SIZE_BYTES = 30 * 1024 * 1024; // 30 MB single file limit
 
 export default function AdminPanel({ initialData, onSave, onReset, onLogout }: AdminPanelProps) {
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error' | 'info';
+    message: string;
+  } | null>(null);
+
+  const [confirmAction, setConfirmAction] = useState<{
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => {
+      setNotification(prev => (prev?.message === message ? null : prev));
+    }, 6000);
+  };
+
   const [data, setData] = useState<SiteData>(() => {
     const raw = JSON.parse(JSON.stringify(initialData)) as SiteData;
     if (!raw.archive) {
@@ -64,19 +82,28 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
     setIsModified(true);
   };
 
-  const handleSave = () => {
-    onSave(data);
-    setIsModified(false);
-    alert('All changes saved to your browser database successfully!');
-  };
-
-  const handleReset = () => {
-    if (confirm('Are you sure you want to revert all customizations back into defaults? All local updates will be erased.')) {
-      onReset();
+  const handleSave = async () => {
+    const success = await onSave(data);
+    if (success) {
+      setIsModified(false);
+      showNotification('All modifications saved to your browser database successfully! Local storage limit is expanded up to 5 GB.', 'success');
+    } else {
+      showNotification('Save failed: Unable to save to the browser database. Please check your available disk storage space.', 'error');
     }
   };
 
-  // Safe file reader with strict 5MB limit validation
+  const handleReset = () => {
+    setConfirmAction({
+      message: 'Are you sure you want to revert all customizations back into defaults? All local updates will be erased.',
+      onConfirm: () => {
+        onReset();
+        showNotification('Boilerplate templates restored. Switch tabs or refresh to view defaults.', 'info');
+        setConfirmAction(null);
+      }
+    });
+  };
+
+  // Safe file reader with strict validation
   const handleFileUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
     onComplete: (base64Str: string) => void
@@ -85,7 +112,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
     if (!file) return;
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      alert(`File size exceeds the permitted 5 MB limit. Please select a smaller file (Maximum size: 5 MB).`);
+      showNotification(`File size exceeds the permitted 30 MB limit. Please select a smaller file (Maximum size: 30 MB). Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB.`, 'error');
       e.target.value = '';
       return;
     }
@@ -221,7 +248,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                     <div className="mt-2.5">
                       <label className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium rounded-lg transition-colors">
                         <Upload size={14} className="text-ocean-accent" />
-                        <span>Upload CV PDF (Max 5 MB)</span>
+                        <span>Upload CV PDF (Max 30 MB)</span>
                         <input
                           type="file"
                           accept=".pdf,.doc,.docx"
@@ -268,10 +295,10 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                   />
                 </div>
 
-                {/* Profile photos slideshow sequences with 5MB uploads */}
+                {/* Profile photos slideshow sequences with 30MB uploads */}
                 <div className="pt-6 border-t border-slate-100 space-y-4">
                   <h3 className="font-serif font-bold text-slate-800 text-sm">Cycling Profile Photos Sequence (Rotates automatically)</h3>
-                  <p className="text-xs text-slate-500">Configure 5 profile pictures. Max upload limit is strictly 5 MB per photo.</p>
+                  <p className="text-xs text-slate-500">Configure 5 profile pictures. Max upload limit is strictly 30 MB per photo.</p>
                   
                   <div className="space-y-4">
                     {data.hero.galleryImages.map((imgUrl, index) => (
@@ -291,7 +318,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                           />
                           <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded shadow-xs transition-all mt-1">
                             <Upload size={12} className="text-ocean-accent" />
-                            <span>Upload Photo {index + 1} (Max 5 MB)</span>
+                            <span>Upload Photo {index + 1} (Max 30 MB)</span>
                             <input
                               type="file"
                               accept="image/*"
@@ -322,10 +349,10 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                   </div>
                 </div>
 
-                {/* Background videos slideshow sequences with 5MB uploads */}
+                {/* Background videos slideshow sequences with 30MB uploads */}
                 <div className="pt-6 border-t border-slate-100 space-y-4">
                   <h3 className="font-serif font-bold text-slate-800 text-sm">First Page Background Videos (Rotates automatically)</h3>
-                  <p className="text-xs text-slate-500">Configure 5 background video files (MP4 format). Maximum upload limit is strictly 5 MB per file package.</p>
+                  <p className="text-xs text-slate-500">Configure 5 background video files (MP4 format). Maximum upload limit is strictly 30 MB per file package.</p>
                   
                   <div className="space-y-4">
                     {data.hero.videoUrls.map((vidUrl, index) => (
@@ -345,7 +372,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                           />
                           <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded shadow-xs transition-all mt-1">
                             <Upload size={12} className="text-ocean-accent" />
-                            <span>Upload Video {index + 1} (Max 5 MB)</span>
+                            <span>Upload Video {index + 1} (Max 30 MB)</span>
                             <input
                               type="file"
                               accept="video/*"
@@ -403,7 +430,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                       />
                       <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded">
                         <Upload size={12} className="text-ocean-accent" />
-                        <span>Upload Custom Photo (Max 5 MB)</span>
+                        <span>Upload Custom Photo (Max 30 MB)</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -1138,7 +1165,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                 {/* Recent Activities modal gallery list */}
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
                   <h3 className="font-serif font-bold text-slate-800 text-sm">Recent Activities Popup (Media & Summaries)</h3>
-                  <p className="text-xs text-slate-500">Add or edit activities featured in the Home "Recent Activities" pop-up screen. Maximum upload size: strictly 5 MB.</p>
+                  <p className="text-xs text-slate-500">Add or edit activities featured in the Home "Recent Activities" pop-up screen. Maximum upload size: strictly 30 MB.</p>
                   
                   <div className="space-y-4">
                     {data.activities.recentActivities.map((act, idx) => (
@@ -1216,7 +1243,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                           <div className="pt-5">
                             <label className="cursor-pointer inline-flex items-center gap-1 px-3 py-1.5 border bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-100 rounded">
                               <Upload size={12} className="text-ocean-accent" />
-                              <span>Upload File (Max 5 MB)</span>
+                              <span>Upload File (Max 30 MB)</span>
                               <input
                                 type="file"
                                 accept="image/*,video/*"
@@ -1366,7 +1393,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                         <div className="pt-4">
                           <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 border bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 rounded font-semibold whitespace-nowrap">
                             <Upload size={12} className="text-ocean-accent" />
-                            <span>Upload Portrait (Max 5 MB)</span>
+                            <span>Upload Portrait (Max 30 MB)</span>
                             <input
                               type="file"
                               accept="image/*"
@@ -1548,10 +1575,10 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                         />
                       </div>
 
-                      {/* Custom blog gallery layout with 5MB restrict */}
+                      {/* Custom blog gallery layout with 30MB restrict */}
                       <div className="pt-4 border-t border-slate-100 bg-slate-50/50 p-4 rounded-lg">
                         <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">Blog Attachment Gallery (Images)</h4>
-                        <p className="text-[10px] text-slate-540 mb-3">Configure up to 3 to 5 images per blog details sheet. Strictly Max 5 MB upload limit.</p>
+                        <p className="text-[10px] text-slate-540 mb-3">Configure up to 3 to 5 images per blog details sheet. Strictly Max 30 MB upload limit.</p>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                           {(post.galleryImages || []).map((galImg, gIdx) => (
@@ -1578,7 +1605,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                               <div className="flex justify-between items-center pt-1.5">
                                 <label className="cursor-pointer inline-flex items-center gap-1 bg-slate-50 hover:bg-slate-100 px-2 py-1 text-[9px] font-semibold rounded border border-slate-200">
                                   <Upload size={10} className="text-ocean-accent" />
-                                  <span>Upload (Max 5 MB)</span>
+                                  <span>Upload (Max 30 MB)</span>
                                   <input
                                     type="file"
                                     accept="image/*"
@@ -1661,8 +1688,8 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
             {activeTab === 'archive' && (
               <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
                 <div>
-                  <h3 className="font-serif font-bold text-slate-800 text-sm border-b pb-2">Archive & Media Section Settings</h3>
-                  <p className="text-xs text-slate-500 mt-1">Manage the historical visual records of fieldwork, research labs, or expeditions. Add up to 10 files (limit: 5MB per file).</p>
+                  <h4 className="text-xs font-serif font-bold text-slate-800 text-sm border-b pb-2">Archive & Media Section Settings</h4>
+                  <p className="text-xs text-slate-500 mt-1">Manage the historical visual records of fieldwork, research labs, or expeditions. Add up to 10 files (limit: 30MB per file).</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1706,7 +1733,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                   <div className="flex justify-between items-center mb-4">
                     <div>
                       <h4 className="text-xs font-bold text-slate-700 uppercase">Uploaded Files ({data.archive?.items?.length || 0} / 10)</h4>
-                      <p className="text-[10px] text-slate-400">Supported formats: JPG, PNG, GIF, MP4, WebM. (Max 5MB each)</p>
+                      <p className="text-[10px] text-slate-400">Supported formats: JPG, PNG, GIF, MP4, WebM. (Max 30MB each)</p>
                     </div>
 
                     {(data.archive?.items?.length || 0) < 10 && (
@@ -1721,7 +1748,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                             if (!file) return;
 
                             if (file.size > MAX_FILE_SIZE_BYTES) {
-                              alert(`File is too large. The size limit is 5MB. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB.`);
+                              showNotification(`File is too large. The size limit is 30MB. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB.`, 'error');
                               e.target.value = '';
                               return;
                             }
@@ -2005,6 +2032,57 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
           </div>
         </div>
       </main>
+
+      {/* Floating State Toast Notification Banner */}
+      {notification && (
+        <div 
+          className={`fixed bottom-6 right-6 z-50 flex items-center justify-between gap-3 px-4 py-3.5 rounded-xl shadow-2xl border animate-fade-in font-sans text-xs max-w-sm ${
+            notification.type === 'success'
+              ? 'bg-emerald-50 border-emerald-250 text-emerald-800'
+              : notification.type === 'error'
+              ? 'bg-rose-50 border-rose-250 text-rose-800 animate-bounce'
+              : 'bg-indigo-50 border-indigo-200 text-indigo-800'
+          }`}
+          style={{ animation: 'slideUp 0.15s ease-out' }}
+        >
+          <div className="flex-1 font-semibold">{notification.message}</div>
+          <button 
+            type="button" 
+            onClick={() => setNotification(null)}
+            className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer shrink-0"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Confirmation Modal Overlay */}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xl p-6 max-w-md w-full space-y-4 animate-scale-in">
+            <h3 className="text-sm font-bold text-slate-800">Please Confirm Action</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">{confirmAction.message}</p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmAction(null)}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-600 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  confirmAction.onConfirm();
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
+              >
+                Reset Default Templates
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
