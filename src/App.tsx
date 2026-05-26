@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { INITIAL_DATA } from './initialData';
 import { SiteData } from './types';
-import { loadFromGoogleSheet, saveToGoogleSheet, getAccessToken } from './utils/googleSheets';
 import { saveToIndexedDB, getFromIndexedDB, removeFromIndexedDB, smartMergeData } from './utils/db';
 
 // Importing extracted functional modules
@@ -23,14 +22,16 @@ export default function App() {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
-  // Load Google Sheet ID from env or local storage
-  const [sheetId, setSheetId] = useState<string>(() => {
-    return import.meta.env.VITE_GOOGLE_SHEET_ID || localStorage.getItem('academic_portfolio_sheet_id') || '';
+  // Load Google Apps Script Webhook URL from env or local storage
+  const [apiUrl, setApiUrl] = useState<string>(() => {
+    return import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL || localStorage.getItem('academic_portfolio_api_url') || '/api/site-data';
   });
 
-  const updateSheetId = (id: string) => {
-    setSheetId(id);
-    localStorage.setItem('academic_portfolio_sheet_id', id);
+  const updateApiUrl = (url: string) => {
+    setApiUrl(url);
+    if (url.startsWith('http')) {
+      localStorage.setItem('academic_portfolio_api_url', url);
+    }
   };
 
   // Initialize and load persisted dataset from server store (with IndexedDB fallback)
@@ -39,11 +40,15 @@ export default function App() {
       try {
         let serverData: SiteData | null = null;
         try {
-          if (sheetId) {
-            serverData = await loadFromGoogleSheet(sheetId);
+          const response = await fetch(apiUrl);
+          if (response.ok) {
+            const rawData = await response.json();
+            if (rawData && !rawData.error) {
+              serverData = rawData;
+            }
           }
         } catch (fetchErr) {
-          console.warn('Could not contact Google Sheets API, checking browser database fallback...', fetchErr);
+          console.warn('Could not contact API, checking browser database fallback...', fetchErr);
         }
 
         let parsed = serverData;
@@ -81,12 +86,13 @@ export default function App() {
           if (updated) {
             setData(merged);
             await saveToIndexedDB('academic_portfolio_site_data_v4', merged);
-            if (sheetId) {
-                const token = await getAccessToken();
-                if(token) {
-                    await saveToGoogleSheet(sheetId, token, merged);
-                }
-            }
+            try {
+              await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(merged),
+              });
+            } catch(e) {}
           } else {
             setData(parsed);
             await saveToIndexedDB('academic_portfolio_site_data_v4', parsed);
@@ -95,12 +101,13 @@ export default function App() {
           // Initialize fresh template
           const newTemplate = JSON.parse(JSON.stringify(INITIAL_DATA));
           setData(newTemplate);
-          if (sheetId) {
-              const token = await getAccessToken();
-              if(token) {
-                  await saveToGoogleSheet(sheetId, token, newTemplate);
-              }
-          }
+          try {
+            await fetch(apiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newTemplate),
+            });
+          } catch(e) {}
         }
       } catch (err) {
         console.error('Error during database initialization:', err);
@@ -109,27 +116,29 @@ export default function App() {
     };
 
     initData();
-  }, [sheetId]);
+  }, [apiUrl]);
 
   // Periodic background check to fetch fresh published data (Real-Time Sync for multi-user tabs)
   useEffect(() => {
-    if (isAdminMode || !sheetId) return; // Prevent overwriting while administrator is editing draft changes
+    if (isAdminMode || !apiUrl.startsWith('http')) return; // Prevent overwriting while administrator is editing draft changes
 
     const intervalId = setInterval(async () => {
       try {
-        const freshData = await loadFromGoogleSheet(sheetId);
-        // Match and refresh ONLY when data actually differs to optimize browser performance
-        if (freshData && freshData.hero && JSON.stringify(freshData) !== JSON.stringify(data)) {
-          setData(freshData);
-          await saveToIndexedDB('academic_portfolio_site_data_v4', freshData);
+        const response = await fetch(apiUrl);
+        if (response.ok) {
+           const freshData = await response.json();
+           if (freshData && freshData.hero && !freshData.error && JSON.stringify(freshData) !== JSON.stringify(data)) {
+             setData(freshData);
+             await saveToIndexedDB('academic_portfolio_site_data_v4', freshData);
+           }
         }
       } catch (err) {
         // Silently swallow network drops
       }
-    }, 15000); // Poll slower for Google Sheets to avoid rate limits
+    }, 15000);
 
     return () => clearInterval(intervalId);
-  }, [isAdminMode, data, sheetId]);
+  }, [isAdminMode, data, apiUrl]);
 
   const handleSaveData = async (updatedData: SiteData): Promise<boolean> => {
     try {
@@ -138,14 +147,15 @@ export default function App() {
       await saveToIndexedDB('academic_portfolio_site_data_v4', updatedData);
 
       // Save to server-side filesystem store so other devices and visitors load it
-      if (sheetId) {
-        const token = await getAccessToken();
-        if (token) {
-            return await saveToGoogleSheet(sheetId, token, updatedData);
-        }
-      }
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+           'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedData),
+      });
 
-      return false; // Could not save to sheets
+      return response.ok;
     } catch (e) {
       console.error('Failed to save to server and browser database:', e);
       return false;
@@ -158,12 +168,11 @@ export default function App() {
       await removeFromIndexedDB('academic_portfolio_site_data_v4');
       localStorage.removeItem('academic_portfolio_site_data_v3');
       
-      if (sheetId) {
-        const token = await getAccessToken();
-        if (token) {
-          await saveToGoogleSheet(sheetId, token, INITIAL_DATA);
-        }
-      }
+      await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(INITIAL_DATA),
+      });
     } catch (e) {
       console.error('Error resetting site modifications:', e);
     }
@@ -215,8 +224,8 @@ export default function App() {
       {/* Access validation dialog overlay */}
       {isLoginOpen && (
         <LoginModal
-          sheetId={sheetId}
-          setSheetId={updateSheetId}
+          apiUrl={apiUrl}
+          setApiUrl={updateApiUrl}
           onLogin={() => {
             setIsAdminMode(true);
             setIsLoginOpen(false);

@@ -1,50 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { Lock, FileSpreadsheet } from 'lucide-react';
-import { googleSignIn, initAuth, getAccessToken } from '../utils/googleSheets';
+import React, { useState } from 'react';
+import { Lock, Webhook } from 'lucide-react';
 
 interface LoginModalProps {
   onLogin: () => void;
   onCancel: () => void;
-  sheetId: string;
-  setSheetId: (id: string) => void;
+  apiUrl: string;
+  setApiUrl: (url: string) => void;
 }
 
-export default function LoginModal({ onLogin, onCancel, sheetId, setSheetId }: LoginModalProps) {
+export default function LoginModal({ onLogin, onCancel, apiUrl, setApiUrl }: LoginModalProps) {
+  const [password, setPassword] = useState('');
   const [errorString, setErrorString] = useState('');
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [requiresSheetId, setRequiresSheetId] = useState(!sheetId);
-  const [inputSheetId, setInputSheetId] = useState(sheetId);
+  const [inputUrl, setInputUrl] = useState(apiUrl);
+  
+  // Only require URL input if the system doesn't already have one embedded in env variables
+  const needsUrl = !import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
 
-  useEffect(() => {
-    return initAuth(
-      (user, token) => {
-        // User auto-logged in, but wait for them to click "Verify Access" or automatically login if we have a Sheet ID
-      },
-      () => {}
-    );
-  }, []);
-
-  const handleGoogleSignIn = async () => {
-    setIsLoggingIn(true);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     setErrorString('');
-    try {
-      if (requiresSheetId) {
-        if (!inputSheetId.trim()) {
-          setErrorString('Please enter a valid Google Sheets ID.');
-          setIsLoggingIn(false);
-          return;
-        }
-        setSheetId(inputSheetId.trim());
-      }
+    
+    if (needsUrl && !inputUrl.trim()) {
+      setErrorString('Please enter your Google Apps Script URL.');
+      return;
+    }
 
-      const result = await googleSignIn();
-      if (result) {
-        onLogin();
+    if (password === 'admin17') {
+      if (needsUrl) {
+         setApiUrl(inputUrl.trim());
       }
-    } catch (err: any) {
-      setErrorString(err.message || 'Authentication failed. Please try again.');
-    } finally {
-      setIsLoggingIn(false);
+      onLogin();
+    } else {
+      setErrorString('Incorrect password. Please try again.');
     }
   };
 
@@ -60,32 +47,46 @@ export default function LoginModal({ onLogin, onCancel, sheetId, setSheetId }: L
             Admin Portal Access
           </h2>
           <p className="text-xs text-slate-500 text-center mt-2">
-            Sign in with Google to securely edit and save your portfolio data back to your Google Sheet.
+            Sign in to modify your portfolio. Optionally enter your Apps Script Web App URL for Netlify backend persistence.
           </p>
         </div>
 
-        <div className="space-y-4">
-          {requiresSheetId && (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {needsUrl && (
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">
-                Google Sheets ID
+                Google Apps Script Web App URL
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FileSpreadsheet className="h-4 w-4 text-slate-400" />
+                  <Webhook className="h-4 w-4 text-slate-400" />
                 </div>
                 <input
                   type="text"
-                  value={inputSheetId}
-                  onChange={(e) => setInputSheetId(e.target.value)}
-                  className="w-full pl-10 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-ocean-accent focus:border-transparent outline-none transition-all text-sm"
-                  placeholder="e.g. 1BxiMVs0XRY..."
-                  autoFocus
+                  value={inputUrl}
+                  onChange={(e) => setInputUrl(e.target.value)}
+                  className="w-full pl-10 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-ocean-accent focus:border-transparent outline-none transition-all text-sm mb-1"
+                  placeholder="https://script.google.com/macros/s/..."
                 />
               </div>
-              <p className="text-[10px] items-center text-slate-400 mt-1">Make sure the linked Google Sheet has permission set to 'Anyone with the link can view' for public visitors.</p>
+              <p className="text-[10px] items-center text-slate-400 mt-1">Make sure it's deployed as 'Execute as: Me' and 'Access: Anyone'.</p>
             </div>
           )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-ocean-accent focus:border-transparent outline-none transition-all text-sm"
+              placeholder="Enter password"
+              autoFocus
+              id="admin-password-input"
+            />
+          </div>
 
           {errorString && (
             <p className="text-red-500 text-xs font-medium" id="login-error-text">
@@ -102,14 +103,13 @@ export default function LoginModal({ onLogin, onCancel, sheetId, setSheetId }: L
               Cancel
             </button>
             <button
-              onClick={handleGoogleSignIn}
-              disabled={isLoggingIn}
-              className="flex-1 px-4 py-2.5 bg-ocean-dark text-white rounded-lg hover:bg-slate-800 transition-colors text-sm font-semibold shadow-md inline-flex items-center justify-center disabled:opacity-75 disabled:cursor-wait cursor-pointer"
+              type="submit"
+              className="flex-1 px-4 py-2.5 bg-ocean-dark text-white rounded-lg hover:bg-slate-800 transition-colors text-sm font-semibold shadow-md inline-flex items-center justify-center cursor-pointer"
             >
-              {isLoggingIn ? 'Authenticating...' : 'Sign in with Google'}
+              Verify Access
             </button>
           </div>
-        </div>
+        </form>
 
       </div>
     </div>
