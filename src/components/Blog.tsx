@@ -27,7 +27,7 @@ export default function Blog({ blogsConfig, blogs }: BlogProps) {
             onClick={() => setSelectedBlog(null)}
             className="inline-flex items-center gap-2 text-sm font-semibold text-ocean-accent hover:text-ocean-medium mb-8 cursor-pointer group"
           >
-            <ArrowLeft size={16} className="transform group-hover:-translate-x-1 transition-transform" />
+            <ArrowLeft size={16} className="transform group-hover:-translate-x-1 transition-transform shrink-0" />
             Back to Articles List
           </button>
 
@@ -38,15 +38,15 @@ export default function Blog({ blogsConfig, blogs }: BlogProps) {
             
             <div className="flex flex-wrap items-center gap-4 text-xs md:text-sm text-slate-500 border-b border-slate-200/80 pb-4">
               <span className="inline-flex items-center gap-1">
-                <Calendar size={14} />
+                <Calendar size={14} className="shrink-0" />
                 {selectedBlog.date}
               </span>
               <span className="inline-flex items-center gap-1">
-                <Clock size={14} />
+                <Clock size={14} className="shrink-0" />
                 {selectedBlog.readTime}
               </span>
               <span className="inline-flex items-center gap-1">
-                <User size={14} />
+                <User size={14} className="shrink-0" />
                 By {selectedBlog.author}
               </span>
             </div>
@@ -84,8 +84,8 @@ export default function Blog({ blogsConfig, blogs }: BlogProps) {
         {/* Title bar banner */}
         <div className="text-center mb-16">
           <div className="flex justify-center mb-4">
-            <div className="bg-ocean-light p-3 rounded-full text-ocean-accent shadow-sm">
-              <BookOpen size={28} />
+            <div className="bg-ocean-light p-3 rounded-full text-ocean-accent shadow-sm shrink-0">
+              <BookOpen size={28} className="shrink-0" />
             </div>
           </div>
           <h2 className="text-3xl font-serif font-bold text-ocean-dark mb-4">
@@ -121,11 +121,11 @@ export default function Blog({ blogsConfig, blogs }: BlogProps) {
                 <div className="p-6 flex flex-col flex-grow">
                   <div className="flex items-center gap-3.5 text-xs text-slate-400 mb-3 font-mono">
                     <span className="flex items-center gap-1">
-                      <Calendar size={12} />
+                      <Calendar size={12} className="shrink-0" />
                       {post.date}
                     </span>
                     <span className="flex items-center gap-1">
-                      <Clock size={12} />
+                      <Clock size={12} className="shrink-0" />
                       {post.readTime}
                     </span>
                   </div>
@@ -140,7 +140,7 @@ export default function Blog({ blogsConfig, blogs }: BlogProps) {
 
                   <div className="pt-4 border-t border-slate-200/60 flex items-center justify-between">
                     <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                      <User size={12} className="text-ocean-accent" />
+                      <User size={12} className="text-ocean-accent shrink-0" />
                       {post.author}
                     </span>
                     
@@ -150,7 +150,7 @@ export default function Blog({ blogsConfig, blogs }: BlogProps) {
                       className="text-ocean-accent hover:text-ocean-medium font-bold text-xs flex items-center gap-1 group/btn cursor-pointer"
                     >
                       Read Now
-                      <ArrowRight size={12} className="transform group-hover/btn:translate-x-0.5 transition-transform" />
+                      <ArrowRight size={12} className="transform group-hover/btn:translate-x-0.5 transition-transform shrink-0" />
                     </button>
                   </div>
                 </div>

@@ -62,10 +62,10 @@ export default function Publications({ publicationsConfig, publications }: Publi
             href={pub.doi.startsWith('http') ? pub.doi : `https://doi.org/${pub.doi}`}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center text-xs text-ocean-accent hover:text-ocean-medium font-semibold whitespace-nowrap bg-ocean-light hover:bg-ocean-accent hover:text-white px-3 py-1.5 rounded-md transition-all gap-1 border border-ocean-accent/10"
+            className="flex items-center text-xs text-ocean-accent hover:text-ocean-medium font-semibold whitespace-nowrap bg-ocean-light hover:bg-ocean-accent hover:text-white px-3 py-1.5 rounded-md transition-all gap-1 border border-ocean-accent/10 shrink-0"
           >
             DOI Link
-            <ExternalLink size={12} />
+            <ExternalLink size={12} className="shrink-0" />
           </a>
         )}
       </div>
@@ -96,8 +96,8 @@ export default function Publications({ publicationsConfig, publications }: Publi
         
         {/* Title bar banner */}
         <div className="flex items-center gap-3.5 mb-14 border-b border-slate-200/60 pb-4">
-          <div className="bg-ocean-dark p-2 text-white rounded-lg shadow-md">
-            <FileText size={24} />
+          <div className="bg-ocean-dark p-2 text-white rounded-lg shadow-md shrink-0">
+            <FileText size={24} className="shrink-0" />
           </div>
           <div>
             <h2 className="text-3xl font-serif font-bold text-ocean-dark">
@@ -110,9 +110,9 @@ export default function Publications({ publicationsConfig, publications }: Publi
         </div>
 
         {/* Dynamic Category groups */}
-        {renderSection("Articles", articles, <Layers size={18} className="text-ocean-accent" />)}
-        {renderSection("Conferences/Seminars", conferences, <Users size={18} className="text-ocean-accent" />)}
-        {renderSection("Workshops", workshops, <BookOpen size={18} className="text-ocean-accent" />)}
+        {renderSection("Articles", articles, <Layers size={18} className="text-ocean-accent shrink-0" />)}
+        {renderSection("Conferences/Seminars", conferences, <Users size={18} className="text-ocean-accent shrink-0" />)}
+        {renderSection("Workshops", workshops, <BookOpen size={18} className="text-ocean-accent shrink-0" />)}
 
       </div>
     </section>

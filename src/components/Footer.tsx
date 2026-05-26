@@ -12,28 +12,29 @@ export default function Footer({ contact, onOpenLogin }: FooterProps) {
   const currentYear = new Date().getFullYear();
 
   // Render profiles icons
-  const renderProfileIcon = (type: string, fallback: string) => {
-    switch (type.toLowerCase()) {
+  const renderProfileIcon = (type: string | undefined | null, fallback: string) => {
+    const normType = (type || '').trim().toLowerCase();
+    switch (normType) {
       case 'linkedin':
-        return <Linkedin size={14} />;
+        return <Linkedin size={14} className="shrink-0" />;
       case 'facebook':
-        return <Facebook size={14} />;
+        return <Facebook size={14} className="shrink-0" />;
       case 'x':
       case 'twitter':
-        return <Twitter size={14} />;
+        return <Twitter size={14} className="shrink-0" />;
       case 'google':
       case 'scholar':
-        return <BookOpen size={14} />;
+        return <BookOpen size={14} className="shrink-0" />;
       case 'researchgate':
-        return <GraduationCap size={14} />;
+        return <GraduationCap size={14} className="shrink-0" />;
       case 'orcid':
-        return <User size={14} />;
+        return <User size={14} className="shrink-0" />;
       case 'scopus':
-        return <Database size={14} />;
+        return <Database size={14} className="shrink-0" />;
       case 'clarivate':
-        return <Layers size={14} />;
+        return <Layers size={14} className="shrink-0" />;
       default:
-        return <span className="font-mono font-bold text-[9px] uppercase">{fallback}</span>;
+        return <span className="font-mono font-bold text-[9px] uppercase shrink-0">{fallback}</span>;
     }
   };
 
@@ -47,17 +48,17 @@ export default function Footer({ contact, onOpenLogin }: FooterProps) {
             <h3 className="text-white text-base font-serif font-bold mb-6 tracking-wide">
               Contact
             </h3>
-            <div className="space-y-4">
+            <div className="space-y-4 font-sans">
               <a
                 href={`mailto:${contact.email}`}
                 className="flex items-center gap-3 hover:text-white hover:underline transition-colors text-sm font-light text-slate-300"
               >
-                <Mail size={18} className="text-ocean-accent" />
+                <Mail size={18} className="text-ocean-accent shrink-0" />
                 <span>{contact.email}</span>
               </a>
               
               <div className="flex items-start gap-3 text-sm font-light text-slate-300">
-                <MapPin size={18} className="text-ocean-accent mt-0.5 flex-shrink-0" />
+                <MapPin size={18} className="text-ocean-accent mt-0.5 shrink-0" />
                 <div>
                   {contact.location.map((line, idx) => (
                     <span className="block leading-relaxed" key={idx}>
@@ -112,11 +113,11 @@ export default function Footer({ contact, onOpenLogin }: FooterProps) {
           <div className="flex items-center gap-4">
             <button
               onClick={onOpenLogin}
-              className="opacity-50 hover:opacity-100 hover:text-white transition-all flex items-center justify-center p-1 cursor-pointer bg-transparent border-none"
+              className="opacity-50 hover:opacity-100 hover:text-white transition-all flex items-center justify-center p-1 cursor-pointer bg-transparent border-none shrink-0"
               aria-label="Admin settings mode"
               id="admin-login-trigger"
             >
-              <Shield size={14} className="hover:scale-110 transition-transform" />
+              <Shield size={14} className="hover:scale-110 transition-transform shrink-0" />
             </button>
           </div>
         </div>

@@ -22,29 +22,29 @@ export default function Methodology({ methodologyConfig, skills }: MethodologyPr
   const renderCategoryIcon = (idx: number, category: string) => {
     const norm = category.toLowerCase();
     if (norm.includes('statistic') || norm.includes('analysis')) {
-      return <ChartNoAxesColumn size={22} />;
+      return <ChartNoAxesColumn size={22} className="shrink-0" />;
     }
     if (norm.includes('remote') || norm.includes('gis') || norm.includes('gps')) {
-      return <Globe size={22} />;
+      return <Globe size={22} className="shrink-0" />;
     }
     if (norm.includes('modeling') || norm.includes('database')) {
-      return <Database size={22} />;
+      return <Database size={22} className="shrink-0" />;
     }
     if (norm.includes('field') || norm.includes('laboratory') || norm.includes('chemistry')) {
-      return <Microscope size={22} />;
+      return <Microscope size={22} className="shrink-0" />;
     }
     if (norm.includes('competen') || norm.includes('technical')) {
-      return <Wrench size={22} />;
+      return <Wrench size={22} className="shrink-0" />;
     }
     if (norm.includes('interpersonal') || norm.includes('soft') || norm.includes('leadership')) {
-      return <Users size={22} />;
+      return <Users size={22} className="shrink-0" />;
     }
     // Fallback based on rotating indices
     switch (idx % 4) {
-      case 0: return <ChartNoAxesColumn size={22} />;
-      case 1: return <Globe size={22} />;
-      case 2: return <Database size={22} />;
-      default: return <Microscope size={22} />;
+      case 0: return <ChartNoAxesColumn size={22} className="shrink-0" />;
+      case 1: return <Globe size={22} className="shrink-0" />;
+      case 2: return <Database size={22} className="shrink-0" />;
+      default: return <Microscope size={22} className="shrink-0" />;
     }
   };
 
@@ -93,7 +93,7 @@ export default function Methodology({ methodologyConfig, skills }: MethodologyPr
         {/* Workflow modernize highlights panel banner */}
         <div className="mt-16 bg-slate-900 rounded-2xl p-8 md:p-12 text-center text-white relative overflow-hidden shadow-xl" id="research-workflow-highlight">
           <div className="relative z-10">
-            <Cpu className="w-10 h-10 mx-auto text-cyan-400 mb-4 animate-pulse" />
+            <Cpu className="w-10 h-10 mx-auto text-cyan-400 mb-4 animate-pulse shrink-0" />
             <h3 className="text-xl font-serif font-bold mb-3 tracking-wide">
               Modernizing Research Workflows
             </h3>

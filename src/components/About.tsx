@@ -47,7 +47,7 @@ export default function About({ about }: AboutProps) {
           {/* Work Experience Column */}
           <div>
             <h3 className="flex items-center gap-3 text-lg font-bold text-ocean-dark mb-6 border-b border-slate-100 pb-3 font-serif">
-              <Briefcase className="text-ocean-accent" size={20} />
+              <Briefcase className="text-ocean-accent shrink-0" size={20} />
               Professional Appointments
             </h3>
             
@@ -77,7 +77,7 @@ export default function About({ about }: AboutProps) {
           {/* Education Appointments Column */}
           <div>
             <h3 className="flex items-center gap-3 text-lg font-bold text-ocean-dark mb-6 border-b border-slate-100 pb-3 font-serif">
-              <GraduationCap className="text-ocean-accent" size={20} />
+              <GraduationCap className="text-ocean-accent shrink-0" size={20} />
               Academic Grounding
             </h3>
             
@@ -110,7 +110,7 @@ export default function About({ about }: AboutProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
               <h3 className="flex items-center gap-2 font-serif font-bold text-base text-ocean-dark mb-4">
-                <Target size={18} className="text-ocean-accent" />
+                <Target size={18} className="text-ocean-accent shrink-0" />
                 {formatAmpersand("Interests & Focus Fields")}
               </h3>
               <ul className="space-y-2.5">
@@ -125,7 +125,7 @@ export default function About({ about }: AboutProps) {
 
             <div>
               <h3 className="flex items-center gap-2 font-serif font-bold text-base text-ocean-dark mb-4">
-                <BookOpen size={18} className="text-ocean-accent" />
+                <BookOpen size={18} className="text-ocean-accent shrink-0" />
                 {formatAmpersand("Specialized Methodologies")}
               </h3>
               <ul className="space-y-2.5">

@@ -10,10 +10,10 @@ export default function Activities({ activities }: ActivitiesProps) {
   // Render distinct icons based on indexing or header matching
   const renderActivityIcon = (idx: number) => {
     switch (idx % 4) {
-      case 0: return <Users className="text-ocean-accent h-7 w-7" />;
-      case 1: return <BookOpen className="text-ocean-accent h-7 w-7" />;
-      case 2: return <GraduationCap className="text-ocean-accent h-7 w-7" />;
-      default: return <FileText className="text-ocean-accent h-7 w-7" />;
+      case 0: return <Users className="text-ocean-accent h-7 w-7 shrink-0" />;
+      case 1: return <BookOpen className="text-ocean-accent h-7 w-7 shrink-0" />;
+      case 2: return <GraduationCap className="text-ocean-accent h-7 w-7 shrink-0" />;
+      default: return <FileText className="text-ocean-accent h-7 w-7 shrink-0" />;
     }
   };
 

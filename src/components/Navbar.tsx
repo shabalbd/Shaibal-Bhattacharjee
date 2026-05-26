@@ -38,13 +38,17 @@ export default function Navbar({ name }: NavbarProps) {
 
   return (
     <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${headerBg}`} id="app-navbar">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-        <a href="#" className={`font-serif font-bold text-xl tracking-tight transition-colors ${logoClass}`}>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center gap-4">
+        <a 
+          href="#" 
+          className={`font-serif font-bold text-base sm:text-xl tracking-tight transition-colors truncate max-w-[70%] sm:max-w-none ${logoClass}`}
+          title={name}
+        >
           {name}
         </a>
 
         {/* Desktop nav */}
-        <nav className="hidden md:flex space-x-6">
+        <nav className="hidden md:flex space-x-6 shrink-0">
           {navItems.map((item) => (
             <a
               key={item.name}
@@ -61,12 +65,12 @@ export default function Navbar({ name }: NavbarProps) {
         {/* Mobile menu toggle */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`md:hidden focus:outline-none p-1.5 rounded ${
+          className={`md:hidden focus:outline-none p-1.5 rounded shrink-0 ${
             isScrolled ? 'text-slate-700 hover:bg-slate-100' : 'text-white hover:bg-white/10'
           }`}
           aria-label="Toggle navigation menu"
         >
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
+          {isOpen ? <X size={24} className="shrink-0" /> : <Menu size={24} className="shrink-0" />}
         </button>
       </div>
 
