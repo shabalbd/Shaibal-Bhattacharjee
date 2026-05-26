@@ -2,6 +2,7 @@ import React from 'react';
 import { Users } from 'lucide-react';
 import { PersonItem, PeopleConfig } from '../types';
 import { formatAmpersand } from './Ampersand';
+import { resolveMediaLink } from '../utils/mediaResolver';
 
 interface TeamProps {
   peopleConfig: PeopleConfig;
@@ -31,21 +32,23 @@ export default function Team({ peopleConfig, people }: TeamProps) {
 
         {/* Directory Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-          {people.map((person) => (
-            <div
-              key={person.id}
-              className="bg-slate-50 rounded-xl overflow-hidden border border-slate-100 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 flex flex-col h-full group"
-            >
-              <div className="aspect-square overflow-hidden relative">
-                <div className="absolute inset-0 bg-ocean-accent/10 opacity-70 group-hover:opacity-0 transition-opacity z-10" />
-                <img
-                  src={person.imageUrl || 'https://via.placeholder.com/150'}
-                  alt={person.name}
-                  className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
+          {people.map((person) => {
+            const resolvedImg = resolveMediaLink(person.imageUrl || '', 'image').displayUrl || person.imageUrl || 'https://via.placeholder.com/150';
+            return (
+              <div
+                key={person.id}
+                className="bg-slate-50 rounded-xl overflow-hidden border border-slate-100 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 flex flex-col h-full group"
+              >
+                <div className="aspect-square overflow-hidden relative">
+                  <div className="absolute inset-0 bg-ocean-accent/10 opacity-70 group-hover:opacity-0 transition-opacity z-10" />
+                  <img
+                    src={resolvedImg}
+                    alt={person.name}
+                    className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
 
               <div className="p-4 flex flex-col flex-grow">
                 <h3 className="font-serif font-bold text-sm md:text-base text-ocean-dark mb-0.5 leading-tight group-hover:text-ocean-accent transition-colors">
@@ -62,7 +65,8 @@ export default function Team({ peopleConfig, people }: TeamProps) {
                 </p>
               </div>
             </div>
-          ))}
+          );
+        })}
         </div>
 
       </div>

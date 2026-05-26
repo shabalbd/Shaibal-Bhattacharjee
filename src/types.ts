@@ -54,7 +54,7 @@ export interface PublicationItem {
   pages?: string;
   status: 'Published' | 'Under Review' | 'In Preparation';
   doi?: string;
-  type: 'article' | 'conference' | 'workshop';
+  type: 'article' | 'conference' | 'workshop' | 'preprint' | 'presentation' | 'poster' | 'book' | 'data' | 'code' | 'thesis' | 'data-article';
   publishedDate?: string;
 }
 

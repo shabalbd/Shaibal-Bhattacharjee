@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Briefcase, Download, X } from 'lucide-react';
 import { HeroData, RecentActivityItem } from '../types';
 import { formatAmpersand } from './Ampersand';
+import { resolveMediaLink } from '../utils/mediaResolver';
 
 interface HeroProps {
   hero: HeroData;
@@ -12,6 +13,7 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [activeVideoIdx, setActiveVideoIdx] = useState(0);
   const [isActivitiesModalOpen, setIsActivitiesModalOpen] = useState(false);
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
 
   // Validate slideshow photos (fallback if empty)
   const images = useMemo(() => {
@@ -19,7 +21,7 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
     const fallback = hero.imageUrl || "https://picsum.photos/400/400?grayscale";
     const result = arr.length > 0 ? [...arr] : [fallback];
     while (result.length < 5) result.push(result[result.length - 1] || fallback);
-    return result.slice(0, 5);
+    return result.slice(0, 5).map(url => resolveMediaLink(url, 'image'));
   }, [hero.galleryImages, hero.imageUrl]);
 
   // Validate slideshow videos (fallback if empty)
@@ -28,19 +30,19 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
     const fallback = hero.videoUrl || "https://videos.pexels.com/video-files/3576686/3576686-hd_1920_1080_30fps.mp4";
     const result = arr.length > 0 ? [...arr] : [fallback];
     while (result.length < 5) result.push(result[result.length - 1] || fallback);
-    return result.slice(0, 5);
+    return result.slice(0, 5).map(url => resolveMediaLink(url, 'video'));
   }, [hero.videoUrls, hero.videoUrl]);
 
-  // Cycle image slideshow (every 4 seconds)
+  // Cycle image slideshow (every 6 seconds for a total of 30 seconds)
   useEffect(() => {
     if (images.length <= 1) return;
     const interval = setInterval(() => {
       setActiveImageIdx((prev) => (prev + 1) % images.length);
-    }, 4000);
+    }, 6000);
     return () => clearInterval(interval);
   }, [images]);
 
-  // Cycle background video slideshow (every 6 seconds)
+  // Cycle background video slideshow (every 6 seconds for a total of 30 seconds)
   useEffect(() => {
     if (videos.length <= 1) return;
     const interval = setInterval(() => {
@@ -49,27 +51,85 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
     return () => clearInterval(interval);
   }, [videos]);
 
+  // Force autoplay and stream reload on active video source changes (bypasses browser media policy hurdles)
+  useEffect(() => {
+    videos.forEach((vid, idx) => {
+      const el = videoRefs.current[idx];
+      if (el) {
+        if (idx === activeVideoIdx) {
+          try {
+            // Reset to beginning to ensure instant start and loop cycle from zero
+            el.currentTime = 0;
+            const playPromise = el.play();
+            if (playPromise !== undefined) {
+              playPromise.catch((err) => {
+                console.warn("Autoplay was delayed or blocked by browser policies on index", idx, err);
+              });
+            }
+          } catch (err) {
+            console.warn("Play method call error on index", idx, err);
+          }
+        } else {
+          try {
+            el.pause();
+          } catch (err) {
+            // ignore
+          }
+        }
+      }
+    });
+  }, [activeVideoIdx, videos]);
+
   const hasCV = !!(hero.cvUrl && hero.cvUrl.trim().length > 0);
 
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden bg-slate-900/10" id="hero-section">
       {/* Dynamic Video background flow */}
-      <div className="absolute inset-0 z-0">
-        <video
-          key={videos[activeVideoIdx]}
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="w-full h-full object-cover scale-105 transition-all duration-1000"
-        >
-          <source src={videos[activeVideoIdx]} type="video/mp4" />
-          <img
-            src="https://images.pexels.com/photos/1482193/pexels-photo-1482193.jpeg"
-            alt="Ocean coast fallback"
-            className="w-full h-full object-cover"
-          />
-        </video>
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        {videos.map((resolved, idx) => {
+          const isActive = idx === activeVideoIdx;
+
+          if (resolved.isEmbeddable) {
+            if (!isActive) return null; // Avoid running multiple remote iFrame media players
+            let embedSrc = resolved.embedUrl;
+            if (resolved.source === 'youtube') {
+              embedSrc = `${resolved.embedUrl}&autoplay=1&mute=1&playlist=${resolved.embedUrl.split('/').pop()?.split('?')[0]}&controls=0&loop=1&playsinline=1&showinfo=0&rel=0`;
+            } else if (resolved.source === 'vimeo') {
+              embedSrc = `${resolved.embedUrl}&autoplay=1&muted=1&loop=1&background=1`;
+            }
+            return (
+              <iframe
+                key={`${resolved.embedUrl}-${idx}`}
+                src={embedSrc}
+                className="absolute inset-0 w-full h-full object-cover scale-105 pointer-events-none transition-opacity duration-300 border-none animate-fade-in"
+                style={{ width: '100vw', height: '100vh', border: '0' }}
+                allow="autoplay; fullscreen"
+              />
+            );
+          } else {
+            return (
+              <video
+                ref={(el) => { videoRefs.current[idx] = el; }}
+                key={`${resolved.directUrl}-${idx}`}
+                src={resolved.directUrl}
+                autoPlay={isActive}
+                muted
+                loop
+                playsInline
+                preload="auto"
+                className={`absolute inset-0 w-full h-full object-cover scale-105 transition-opacity duration-300 ${
+                  isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                }`}
+              >
+                <img
+                  src="https://images.pexels.com/photos/1482193/pexels-photo-1482193.jpeg"
+                  alt="Ocean coast fallback"
+                  className="w-full h-full object-cover"
+                />
+              </video>
+            );
+          }
+        })}
         {/* 10% black and blue mixed themed overlays */}
         <div className="absolute inset-0 bg-black/10" />
         <div className="absolute inset-0 bg-ocean-dark/30 mix-blend-overlay" />
@@ -143,9 +203,13 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
               {/* Blur back glow */}
               <div className="absolute inset-0 bg-ocean-accent/25 rounded-2xl blur-3xl transform translate-x-4 translate-y-4 group-hover:translate-x-2 group-hover:translate-y-2 transition-transform duration-500" />
               <img
-                src={images[activeImageIdx]}
+                src={images[activeImageIdx]?.displayUrl}
                 alt={hero.name}
                 className="w-full h-full object-cover rounded-2xl border-4 border-white/25 shadow-2xl relative z-10 duration-700"
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://placehold.co/400x500/0f172a/94a3b8?text=Research+Media';
+                }}
               />
             </div>
             
@@ -186,23 +250,30 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
                 <p className="text-center py-10 text-slate-400 italic">No recent activities updated yet.</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {recentActivities.map((act) => (
-                    <article key={act.id} className="border border-slate-100 rounded-xl overflow-hidden bg-slate-50 flex flex-col shadow-sm">
-                      <div className="h-44 bg-slate-200 relative overflow-hidden">
-                        {act.mediaType === 'video' ? (
-                          <video src={act.mediaUrl} className="w-full h-full object-cover" controls playsInline />
-                        ) : (
-                          <img src={act.mediaUrl} alt={act.name} className="w-full h-full object-cover" />
-                        )}
-                      </div>
-                      <div className="p-4 flex-1 flex flex-col justify-between">
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-sm mb-1">{act.name}</h4>
-                          <p className="text-xs text-slate-600 leading-relaxed">{act.description}</p>
+                  {recentActivities.map((act) => {
+                    const resolvedAct = resolveMediaLink(act.mediaUrl, act.mediaType);
+                    return (
+                      <article key={act.id} className="border border-slate-100 rounded-xl overflow-hidden bg-slate-50 flex flex-col shadow-sm">
+                        <div className="h-44 bg-slate-200 relative overflow-hidden flex items-center justify-center">
+                          {act.mediaType === 'video' ? (
+                            resolvedAct.isEmbeddable ? (
+                              <iframe src={resolvedAct.embedUrl} className="w-full h-full border-0" allow="autoplay; fullscreen" />
+                            ) : (
+                              <video src={resolvedAct.directUrl} className="w-full h-full object-cover" controls playsInline />
+                            )
+                          ) : (
+                            <img src={resolvedAct.displayUrl} alt={act.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          )}
                         </div>
-                      </div>
-                    </article>
-                  ))}
+                        <div className="p-4 flex-1 flex flex-col justify-between">
+                          <div>
+                            <h4 className="font-bold text-slate-800 text-sm mb-1">{act.name}</h4>
+                            <p className="text-xs text-slate-600 leading-relaxed">{act.description}</p>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </div>

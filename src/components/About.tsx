@@ -2,12 +2,15 @@ import React from 'react';
 import { Briefcase, BookOpen, Target, GraduationCap } from 'lucide-react';
 import { AboutData } from '../types';
 import { formatAmpersand } from './Ampersand';
+import { resolveMediaLink } from '../utils/mediaResolver';
 
 interface AboutProps {
   about: AboutData;
 }
 
 export default function About({ about }: AboutProps) {
+  const resolvedImg = resolveMediaLink(about.aboutImage || '', 'image').displayUrl || about.aboutImage;
+
   return (
     <section id="about" className="py-20 bg-white">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -26,7 +29,7 @@ export default function About({ about }: AboutProps) {
             <div className="relative">
               <div className="absolute inset-0 bg-ocean-accent/10 rounded-2xl transform rotate-3 translate-x-2 translate-y-2" />
               <img
-                src={about.aboutImage}
+                src={resolvedImg}
                 alt="Shaibal in laboratory"
                 className="relative rounded-2xl shadow-lg w-full max-w-sm object-cover aspect-[3/4]"
               />

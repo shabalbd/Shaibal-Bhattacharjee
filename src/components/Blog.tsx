@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BookOpen, Calendar, Clock, User, ArrowLeft, ArrowRight } from 'lucide-react';
 import { BlogItem, BlogsConfig } from '../types';
+import { resolveMediaLink } from '../utils/mediaResolver';
 
 interface BlogProps {
   blogsConfig: BlogsConfig;
@@ -54,16 +55,19 @@ export default function Blog({ blogsConfig, blogs }: BlogProps) {
 
           {/* Render blog gallery list support (3 to 5 images per blog specified) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10" id="blog-image-grid">
-            {images.map((img, idx) => (
-              <div key={idx} className="rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm aspect-video">
-                <img
-                  src={img}
-                  alt={`${selectedBlog.title} attachment ${idx + 1}`}
-                  className="w-full h-full object-cover hover:scale-102 transition-transform duration-500"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-            ))}
+            {images.map((img, idx) => {
+              const resolvedImg = resolveMediaLink(img || '', 'image').displayUrl || img;
+              return (
+                <div key={idx} className="rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm aspect-video">
+                  <img
+                    src={resolvedImg}
+                    alt={`${selectedBlog.title} attachment ${idx + 1}`}
+                    className="w-full h-full object-cover hover:scale-102 transition-transform duration-500"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              );
+            })}
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-10 shadow-sm leading-relaxed prose prose-slate">
@@ -101,6 +105,7 @@ export default function Blog({ blogsConfig, blogs }: BlogProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {blogs.map((post) => {
             const hasCover = !!post.imageUrl;
+            const resolvedCoverVal = post.imageUrl ? (resolveMediaLink(post.imageUrl, 'image').displayUrl || post.imageUrl) : '';
             return (
               <div
                 key={post.id}
@@ -110,7 +115,7 @@ export default function Blog({ blogsConfig, blogs }: BlogProps) {
                   <div className="h-52 overflow-hidden relative">
                     <div className="absolute inset-0 bg-ocean-dark/10 group-hover:bg-transparent transition-colors z-10 duration-300" />
                     <img
-                      src={post.imageUrl}
+                      src={resolvedCoverVal}
                       alt={post.title}
                       className="w-full h-full object-cover transform group-hover:scale-103 transition-transform duration-700"
                       referrerPolicy="no-referrer"

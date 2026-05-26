@@ -15,9 +15,11 @@ import {
   Upload,
   LogOut,
   Archive,
-  X
+  X,
+  Download
 } from 'lucide-react';
 import { SiteData, SkillCategory, PublicationItem, BlogItem, PersonItem } from '../types';
+import { resolveMediaLink } from '../utils/mediaResolver';
 
 interface AdminPanelProps {
   initialData: SiteData;
@@ -38,6 +40,10 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
     message: string;
     onConfirm: () => void;
   } | null>(null);
+
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [newLinkName, setNewLinkName] = useState('');
+  const [newLinkType, setNewLinkType] = useState<'image' | 'video'>('image');
 
   const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setNotification({ message, type });
@@ -107,10 +113,48 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
     });
   };
 
-  // Safe file reader with strict validation
+  const handleExportBackup = () => {
+    try {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `academic_website_dataset_backup_${Date.now()}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showNotification('Academic website configuration exported as a local JSON database backup successfully!', 'success');
+    } catch (err) {
+      showNotification('Backup export failed: Could not compile data stream.', 'error');
+    }
+  };
+
+  const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileReader = new FileReader();
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    fileReader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (parsed && typeof parsed === 'object' && parsed.hero && parsed.about) {
+          setData(parsed);
+          setIsModified(true);
+          showNotification('Database backup imported successfully! Click "Save Modifications" at the top to commit these changes to the server.', 'success');
+        } else {
+          showNotification('Import failed: Selected JSON file layout does not match academic schema rules.', 'error');
+        }
+      } catch (err) {
+        showNotification('Syntax error: Uploaded file is corrupt or not formatted in valid JSON.', 'error');
+      }
+    };
+    fileReader.readAsText(file);
+    e.target.value = '';
+  };
+
+  // Safe file reader with full-stack server-side upload and storage
   const handleFileUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
-    onComplete: (base64Str: string) => void
+    onComplete: (urlOrBase64: string) => void
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -121,9 +165,43 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
       return;
     }
 
+    showNotification(`Uploading "${file.name}" to the server...`, 'info');
+
     const reader = new FileReader();
-    reader.onloadend = () => {
-      onComplete(reader.result as string);
+    reader.onloadend = async () => {
+      const base64Data = reader.result as string;
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: file.name,
+            type: file.type,
+            base64: base64Data
+          })
+        });
+
+        if (res.ok) {
+          const result = await res.json();
+          if (result && result.url) {
+            showNotification(`"${file.name}" uploaded successfully!`, 'success');
+            onComplete(result.url);
+            return;
+          }
+        }
+        
+        // Fail-safe fallback to base64 if server-side upload endpoint reports an error
+        console.warn('Server upload failed, falling back to local base64 storage:', res.statusText);
+        showNotification('Server-side write bypassed, saving local browser draft instead.', 'info');
+        onComplete(base64Data);
+      } catch (uploadErr) {
+        // Fail-safe fallback to base64 if server-side fetch crashes
+        console.error('Exception during server-side upload, using local fallback:', uploadErr);
+        showNotification('Saved local draft due to service connection state.', 'info');
+        onComplete(base64Data);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -182,6 +260,27 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
             Editing {activeTab.replace('-', ' ')} Values
           </h2>
           <div className="flex items-center gap-4">
+            <button
+              onClick={handleExportBackup}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              title="Download your entire customized website structure as a backup JSON file"
+            >
+              <Download size={14} className="text-cyan-600" />
+              <span>Export Backup</span>
+            </button>
+            <label
+              className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              title="Upload and load a previously saved website backup JSON"
+            >
+              <Upload size={14} className="text-cyan-600" />
+              <span>Import Backup</span>
+              <input
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={handleImportBackup}
+              />
+            </label>
             {isModified && (
               <span className="text-amber-600 text-xs font-semibold animate-pulse">
                 Unsaved modifications pending
@@ -208,7 +307,39 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
 
             {/* TAB: HERO EDITING */}
             {activeTab === 'hero' && (
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+              <>
+                {/* 15GB Cloud Storage Integration Portal Guidance */}
+                <div className="bg-gradient-to-r from-slate-900 via-cyan-950 to-slate-900 border border-cyan-800 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
+                  <div className="absolute right-0 bottom-0 translate-y-1/4 translate-x-1/4 w-36 h-36 bg-cyan-700/10 rounded-full blur-2xl block" />
+                  <div className="relative z-10 space-y-3">
+                    <h3 className="text-sm font-bold font-serif text-cyan-400 flex items-center gap-2">
+                      ☁️ Free 15 GB Cloud Storage Integration & Persistence Guide
+                    </h3>
+                    <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
+                      Instead of uploading heavy files directly to the server container storage (which has a limited ephemeral disk and resets automatically when scaled or restarted), utilize <strong>Google Drive (15 GB FREE)</strong>, <strong>OneDrive (5 GB FREE)</strong>, or <strong>Dropbox (2 GB FREE)</strong> as your online cloud storage center.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                      <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-1">
+                        <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                          🔗 1. Copy Cloud Sharing URL
+                        </span>
+                        <p className="text-[11px] text-slate-300 leading-normal">
+                          Upload your high-res photos, expedition videos, or academic slide decks to your public cloud drive. Copy the link having the sharing privacy level configured as <strong>"Anyone with the link can view / reader"</strong>.
+                        </p>
+                      </div>
+                      <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-1">
+                        <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                          ⚡ 2. Paste or Backup Streams
+                        </span>
+                        <p className="text-[11px] text-slate-300 leading-normal">
+                          Paste the link directly into slot boxes below. The portal's built-in <strong>media resolver</strong> will automatically decode, optimize, and stream it natively to all users on any browser! Use the <strong>Export/Import Backup</strong> buttons above to import or save your entire content settings instantly!
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">Primary Academic Scholar Name</label>
@@ -299,114 +430,171 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                   />
                 </div>
 
-                {/* Profile photos slideshow sequences with 30MB uploads */}
-                <div className="pt-6 border-t border-slate-100 space-y-4">
-                  <h3 className="font-serif font-bold text-slate-800 text-sm">Cycling Profile Photos Sequence (Rotates automatically)</h3>
-                  <p className="text-xs text-slate-500">Configure 5 profile pictures. Max upload limit is strictly 30 MB per photo.</p>
-                  
-                  <div className="space-y-4">
-                    {data.hero.galleryImages.map((imgUrl, index) => (
-                      <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 p-4 border border-slate-200 rounded-lg bg-slate-50 items-center">
-                        <div className="space-y-2">
-                          <label className="block text-xs font-semibold text-slate-600">Picture {index + 1} Source</label>
-                          <input
-                            type="text"
-                            className="w-full p-2 border border-slate-300 rounded text-xs font-mono"
-                            value={imgUrl}
-                            onChange={(e) => {
-                              const copy = [...data.hero.galleryImages];
-                              copy[index] = e.target.value;
-                              updateField('hero', 'galleryImages', copy);
-                              if (index === 0) updateField('hero', 'imageUrl', e.target.value);
-                            }}
-                          />
-                          <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded shadow-xs transition-all mt-1">
-                            <Upload size={12} className="text-ocean-accent" />
-                            <span>Upload Photo {index + 1} (Max 30 MB)</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                handleFileUpload(e, (base64) => {
-                                  const copy = [...data.hero.galleryImages];
-                                  copy[index] = base64;
-                                  updateField('hero', 'galleryImages', copy);
-                                  if (index === 0) updateField('hero', 'imageUrl', base64);
-                                });
-                              }}
-                            />
-                          </label>
-                        </div>
-                        <div className="flex flex-col items-center">
-                          <span className="text-[10px] font-semibold uppercase text-slate-400 mb-1">Preview</span>
-                          <div className="w-16 h-16 rounded overflow-hidden border bg-white flex items-center justify-center">
-                            {imgUrl ? (
-                              <img src={imgUrl} className="w-full h-full object-cover" alt="" />
-                            ) : (
-                              <span className="text-[10px] text-slate-300">Empty</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                 {/* Profile photos slideshow sequences with 30MB uploads */}
+                 <div className="pt-6 border-t border-slate-100 space-y-4">
+                   <h3 className="font-serif font-bold text-slate-800 text-sm">Cycling Profile Photos Sequence (Rotates automatically)</h3>
+                   <p className="text-xs text-slate-500">Configure 5 profile pictures. Paste standard web URLs, Google Drive view links, or direct OneDrive sharing files. Max upload limit is strictly 30 MB per photo.</p>
+                   
+                   <div className="space-y-4">
+                     {Array.from({ length: 5 }).map((_, index) => {
+                       const imgUrl = (data.hero.galleryImages || [])[index] || '';
+                       const resolved = resolveMediaLink(imgUrl, 'image');
+                       return (
+                         <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 p-4 border border-slate-200 rounded-lg bg-slate-50 items-center">
+                           <div className="space-y-2">
+                             <label className="block text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                               <span>🖼️</span> Profile Picture Slot {index + 1} Source Link
+                             </label>
+                             <input
+                               type="text"
+                               placeholder="Paste a direct image URL, Google Drive share URL, or OneDrive link..."
+                               className="w-full p-2 border border-slate-300 rounded text-xs font-mono focus:ring-1 focus:ring-ocean-accent"
+                               value={imgUrl}
+                               onChange={(e) => {
+                                 const copy = [...(data.hero.galleryImages || [])];
+                                 while (copy.length < 5) copy.push('');
+                                 copy[index] = e.target.value;
+                                 const truncated = copy.slice(0, 5);
+                                 updateField('hero', 'galleryImages', truncated);
+                                 if (index === 0) updateField('hero', 'imageUrl', e.target.value);
+                               }}
+                             />
+                             {imgUrl && (
+                               <div className="text-[10px] text-slate-500 font-sans flex items-center gap-1">
+                                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                 Resolved Source: <span className="font-bold uppercase text-ocean-accent">{resolved.source}</span>
+                                 {resolved.source !== 'standard' && <span className="text-emerald-600 font-medium">(Optimized for instant drive loading)</span>}
+                               </div>
+                             )}
+                             <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded shadow-xs transition-colors mt-1">
+                               <Upload size={12} className="text-ocean-accent" />
+                               <span>Upload Photo {index + 1} (Max 30 MB)</span>
+                               <input
+                                 type="file"
+                                 accept="image/*"
+                                 className="hidden"
+                                 onChange={(e) => {
+                                   handleFileUpload(e, (base64) => {
+                                     const copy = [...(data.hero.galleryImages || [])];
+                                     while (copy.length < 5) copy.push('');
+                                     copy[index] = base64;
+                                     const truncated = copy.slice(0, 5);
+                                     updateField('hero', 'galleryImages', truncated);
+                                     if (index === 0) updateField('hero', 'imageUrl', base64);
+                                   });
+                                 }}
+                               />
+                             </label>
+                           </div>
+                           <div className="flex flex-col items-center">
+                             <span className="text-[10px] font-semibold uppercase text-slate-400 mb-1">Preview</span>
+                             <div className="w-16 h-16 rounded overflow-hidden border bg-white flex items-center justify-center relative shadow-sm">
+                               {imgUrl ? (
+                                 <img
+                                   src={resolved.displayUrl}
+                                   className="w-full h-full object-cover"
+                                   alt=""
+                                   onError={(e) => {
+                                     (e.target as HTMLImageElement).src = 'https://placehold.co/100x100/e2e8f0/475569?text=Error';
+                                   }}
+                                   referrerPolicy="no-referrer"
+                                 />
+                               ) : (
+                                 <span className="text-[10px] text-slate-300">Empty</span>
+                               )}
+                             </div>
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
 
-                {/* Background videos slideshow sequences with 30MB uploads */}
-                <div className="pt-6 border-t border-slate-100 space-y-4">
-                  <h3 className="font-serif font-bold text-slate-800 text-sm">First Page Background Videos (Rotates automatically)</h3>
-                  <p className="text-xs text-slate-500">Configure 5 background video files (MP4 format). Maximum upload limit is strictly 30 MB per file package.</p>
-                  
-                  <div className="space-y-4">
-                    {data.hero.videoUrls.map((vidUrl, index) => (
-                      <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 p-4 border border-slate-200 rounded-lg bg-slate-50 items-center">
-                        <div className="space-y-2">
-                          <label className="block text-xs font-semibold text-slate-600">Video {index + 1} Source URL</label>
-                          <input
-                            type="text"
-                            className="w-full p-2 border border-slate-300 rounded text-xs font-mono"
-                            value={vidUrl}
-                            onChange={(e) => {
-                              const copy = [...data.hero.videoUrls];
-                              copy[index] = e.target.value;
-                              updateField('hero', 'videoUrls', copy);
-                              if (index === 0) updateField('hero', 'videoUrl', e.target.value);
-                            }}
-                          />
-                          <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded shadow-xs transition-all mt-1">
-                            <Upload size={12} className="text-ocean-accent" />
-                            <span>Upload Video {index + 1} (Max 30 MB)</span>
-                            <input
-                              type="file"
-                              accept="video/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                handleFileUpload(e, (base64) => {
-                                  const copy = [...data.hero.videoUrls];
-                                  copy[index] = base64;
-                                  updateField('hero', 'videoUrls', copy);
-                                  if (index === 0) updateField('hero', 'videoUrl', base64);
-                                });
-                              }}
-                            />
-                          </label>
-                        </div>
-                        <div className="flex flex-col items-center">
-                          <span className="text-[10px] font-semibold uppercase text-slate-400 mb-1">Preview</span>
-                          <div className="w-24 h-16 rounded overflow-hidden border bg-white flex items-center justify-center">
-                            {vidUrl ? (
-                              <video src={vidUrl} className="w-full h-full object-cover" muted />
-                            ) : (
-                              <span className="text-[10px] text-slate-300">Empty</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                 {/* Background videos slideshow sequences with 30MB uploads */}
+                 <div className="pt-6 border-t border-slate-100 space-y-4">
+                   <h3 className="font-serif font-bold text-slate-800 text-sm">First Page Background Videos (Rotates automatically)</h3>
+                   <p className="text-xs text-slate-500">Configure 5 background video files. Paste direct MP4 streaming media, Google Drive shared videos, or general Web links. Maximum upload limit is strictly 30 MB per file package.</p>
+                   
+                   <div className="space-y-4">
+                     {Array.from({ length: 5 }).map((_, index) => {
+                       const vidUrl = (data.hero.videoUrls || [])[index] || '';
+                       const resolved = resolveMediaLink(vidUrl, 'video');
+                       return (
+                         <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 p-4 border border-slate-200 rounded-lg bg-slate-50 items-center">
+                           <div className="space-y-2">
+                             <label className="block text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                               <span>🎥</span> Background Video Slot {index + 1} Source Link
+                             </label>
+                             <input
+                               type="text"
+                               placeholder="Paste a direct MP4, Google Drive video link, Dropbox share link, or OneDrive web link..."
+                               className="w-full p-2 border border-slate-300 rounded text-xs font-mono focus:ring-1 focus:ring-ocean-accent"
+                               value={vidUrl}
+                               onChange={(e) => {
+                                 const copy = [...(data.hero.videoUrls || [])];
+                                 while (copy.length < 5) copy.push('');
+                                 copy[index] = e.target.value;
+                                 const truncated = copy.slice(0, 5);
+                                 updateField('hero', 'videoUrls', truncated);
+                                 if (index === 0) updateField('hero', 'videoUrl', e.target.value);
+                               }}
+                             />
+                             {vidUrl && (
+                               <div className="text-[10px] text-slate-500 font-sans flex items-center gap-1">
+                                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                 Resolved Stream Format: <span className="font-bold uppercase text-ocean-accent">{resolved.source}</span>
+                                 {resolved.isEmbeddable ? (
+                                   <span className="text-cyan-600 font-medium">(Requires web frame sandbox viewport)</span>
+                                 ) : (
+                                   <span className="text-emerald-600 font-medium">(Direct stream pipeline active)</span>
+                                 )}
+                               </div>
+                             )}
+                             <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded shadow-xs transition-colors mt-1">
+                               <Upload size={12} className="text-ocean-accent" />
+                               <span>Upload Video {index + 1} (Max 30 MB)</span>
+                               <input
+                                 type="file"
+                                 accept="video/*"
+                                 className="hidden"
+                                 onChange={(e) => {
+                                   handleFileUpload(e, (base64) => {
+                                     const copy = [...(data.hero.videoUrls || [])];
+                                     while (copy.length < 5) copy.push('');
+                                     copy[index] = base64;
+                                     const truncated = copy.slice(0, 5);
+                                     updateField('hero', 'videoUrls', truncated);
+                                     if (index === 0) updateField('hero', 'videoUrl', base64);
+                                   });
+                                 }}
+                               />
+                             </label>
+                           </div>
+                           <div className="flex flex-col items-center">
+                             <span className="text-[10px] font-semibold uppercase text-slate-400 mb-1">Preview</span>
+                             <div className="w-24 h-16 rounded overflow-hidden border bg-white flex items-center justify-center relative shadow-sm">
+                               {vidUrl ? (
+                                 resolved.isEmbeddable ? (
+                                   <iframe
+                                     src={resolved.embedUrl}
+                                     className="w-full h-full border-none pointer-events-none"
+                                     allow="autoplay"
+                                   />
+                                 ) : (
+                                   <video src={resolved.directUrl} className="w-full h-full object-cover" muted />
+                                 )
+                               ) : (
+                                 <span className="text-[10px] text-slate-300">Empty</span>
+                               )}
+                             </div>
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
               </div>
+             </>
             )}
 
             {/* TAB: ABOUT ME */}
@@ -425,14 +613,20 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
 
                   <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-center p-4 border border-slate-100 rounded bg-slate-50">
                     <div className="space-y-2">
-                      <label className="block text-xs font-semibold text-slate-500 uppercase">Profile Narrative Image</label>
+                      <label className="block text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                        <span>🖼️</span> Profile Narrative Image (Cloud Link or Uploaded URL)
+                      </label>
+                      <p className="text-[10px] text-slate-500">
+                        Paste a Cloud Sharing URL (Google Drive, Dropbox, OneDrive, etc.) or click the button below to upload a direct file backup. (Max 30 MB)
+                      </p>
                       <input
                         type="text"
                         className="w-full p-2 border border-slate-300 rounded text-xs font-mono"
+                        placeholder="Paste cloud url (e.g. Dropbox, Google Drive, etc.)..."
                         value={data.about.aboutImage}
                         onChange={(e) => updateField('about', 'aboutImage', e.target.value)}
                       />
-                      <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded">
+                      <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded">
                         <Upload size={12} className="text-ocean-accent" />
                         <span>Upload Custom Photo (Max 30 MB)</span>
                         <input
@@ -447,9 +641,16 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                         />
                       </label>
                     </div>
-                    <div className="w-16 h-20 rounded border bg-white overflow-hidden">
-                      <img src={data.about.aboutImage} className="w-full h-full object-cover" alt="" />
-                    </div>
+                    {data.about.aboutImage && (
+                      <div className="w-16 h-20 rounded border bg-white overflow-hidden shadow-xs shrink-0">
+                        <img 
+                          src={resolveMediaLink(data.about.aboutImage, 'image').displayUrl || data.about.aboutImage} 
+                          className="w-full h-full object-cover" 
+                          alt="" 
+                          referrerPolicy="no-referrer" 
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -905,7 +1106,10 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                             }}
                           >
                             <option value="article">Journal Article</option>
-                            <option value="conference">Conference Presentation</option>
+                            <option value="preprint">Preprint</option>
+                            <option value="conference">Conference Seminars</option>
+                            <option value="presentation">Presentation</option>
+                            <option value="poster">Poster</option>
                             <option value="workshop">Training Workshop</option>
                           </select>
                         </div>
@@ -1216,12 +1420,12 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
 
                         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-center">
                           <div className="flex-grow">
-                            <label className="block text-[10px] font-bold text-slate-400 mb-1">Media Source URL</label>
+                            <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Media Source URL (Cloud Link or Base64 / Local Link)</label>
                             <input
                               type="text"
                               className="w-full p-2 border border-slate-300 rounded text-xs font-mono"
                               value={act.mediaUrl}
-                              placeholder="Insert image or video URL/Base64"
+                              placeholder="Paste cloud URL or uploaded local link..."
                               onChange={(e) => {
                                 const copy = [...data.activities.recentActivities];
                                 copy[idx].mediaUrl = e.target.value;
@@ -1230,7 +1434,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-slate-400 mb-1">Media Type</label>
+                            <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Media Type</label>
                             <select
                               className="p-2 border border-slate-300 bg-white rounded text-xs cursor-pointer"
                               value={act.mediaType}
@@ -1245,7 +1449,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                             </select>
                           </div>
                           <div className="pt-5">
-                            <label className="cursor-pointer inline-flex items-center gap-1 px-3 py-1.5 border bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-100 rounded">
+                            <label className="cursor-pointer inline-flex items-center gap-1 px-3 py-2 border bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 rounded whitespace-nowrap shadow-xs">
                               <Upload size={12} className="text-ocean-accent" />
                               <span>Upload File (Max 30 MB)</span>
                               <input
@@ -1267,16 +1471,30 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                           </div>
                         </div>
 
-                        {/* Mini video/image preview render block */}
-                        {act.mediaUrl && (
-                          <div className="w-40 h-24 rounded border overflow-hidden mt-1.5 bg-white">
-                            {act.mediaType === 'video' ? (
-                              <video src={act.mediaUrl} className="w-full h-full object-cover" muted />
-                            ) : (
-                              <img src={act.mediaUrl} className="w-full h-full object-cover" alt="" />
-                            )}
-                          </div>
-                        )}
+                        {/* Rich video/image interactive preview block */}
+                        {act.mediaUrl && (() => {
+                          const resolved = resolveMediaLink(act.mediaUrl, act.mediaType);
+                          return (
+                            <div className="w-40 h-24 rounded border overflow-hidden mt-2 bg-slate-50 relative flex items-center justify-center shadow-xs shrink-0">
+                              {resolved.isEmbeddable ? (
+                                <iframe
+                                  src={resolved.embedUrl}
+                                  className="w-full h-full border-zero scale-102"
+                                  allow="autoplay; fullscreen"
+                                />
+                              ) : resolved.source !== 'standard' || act.mediaType === 'video' ? (
+                                <video src={resolved.directUrl} className="w-full h-full object-cover animate-fade-in" muted controls />
+                              ) : (
+                                <img 
+                                  src={resolved.displayUrl} 
+                                  className="w-full h-full object-cover animate-fade-in" 
+                                  alt="" 
+                                  referrerPolicy="no-referrer" 
+                                />
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
@@ -1342,9 +1560,9 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                       </button>
 
                       <div className="flex gap-6 items-start">
-                        <div className="w-20 h-20 rounded border bg-slate-50 flex overflow-hidden items-center justify-center flex-shrink-0">
+                        <div className="w-20 h-20 rounded border bg-slate-50 flex overflow-hidden items-center justify-center flex-shrink-0 shadow-xs">
                           {person.imageUrl ? (
-                            <img src={person.imageUrl} className="w-full h-full object-cover" alt="" />
+                            <img src={resolveMediaLink(person.imageUrl, 'image').displayUrl || person.imageUrl} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
                           ) : (
                             <span className="text-[10px] text-slate-400">Empty</span>
                           )}
@@ -1380,8 +1598,8 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-center">
-                        <div className="flex-grow">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
                           <label className="block text-[10px] font-bold text-slate-400 mb-1">Peer Institution/Body</label>
                           <input
                             type="text"
@@ -1394,23 +1612,37 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                             }}
                           />
                         </div>
-                        <div className="pt-4">
-                          <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 border bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 rounded font-semibold whitespace-nowrap">
-                            <Upload size={12} className="text-ocean-accent" />
-                            <span>Upload Portrait (Max 30 MB)</span>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1">Portrait Source Link (Cloud Link or Uploaded URL)</label>
+                          <div className="flex gap-2 items-center">
                             <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
+                              type="text"
+                              className="w-full p-2 border border-slate-300 rounded text-xs font-mono"
+                              placeholder="Paste direct URL, Google Drive or OneDrive link..."
+                              value={person.imageUrl || ''}
                               onChange={(e) => {
-                                handleFileUpload(e, (base64) => {
-                                  const copy = [...data.people];
-                                  copy[idx].imageUrl = base64;
-                                  updateField('people', null as any, copy);
-                                });
+                                const copy = [...data.people];
+                                copy[idx].imageUrl = e.target.value;
+                                updateField('people', null as any, copy);
                               }}
                             />
-                          </label>
+                            <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 border bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 rounded font-semibold whitespace-nowrap">
+                              <Upload size={12} className="text-ocean-accent" />
+                              <span>Upload (Max 30M)</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  handleFileUpload(e, (base64) => {
+                                    const copy = [...data.people];
+                                    copy[idx].imageUrl = base64;
+                                    updateField('people', null as any, copy);
+                                  });
+                                }}
+                              />
+                            </label>
+                          </div>
                         </div>
                       </div>
 
@@ -1579,33 +1811,90 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                         />
                       </div>
 
+                      {/* Primary Cover Image configuration block */}
+                      <div className="p-4 border border-slate-200 rounded-lg bg-slate-50 space-y-2">
+                        <label className="block text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                          <span>🖼️</span> Primary Blog Cover Image (Cloud Link or Uploaded URL)
+                        </label>
+                        <p className="text-[10px] text-slate-500">
+                          Set the cover image displayed on cards in the Blogs grid category. Provide a direct cloud URL or click the button to upload an image. (Max 30 MB)
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-center">
+                          <div className="flex-grow">
+                            <input
+                              type="text"
+                              className="w-full p-2 border border-slate-300 rounded text-xs font-mono"
+                              placeholder="Paste cover image link (e.g., Google Drive, OneDrive, Dropbox)..."
+                              value={post.imageUrl || ''}
+                              onChange={(e) => {
+                                const copy = [...data.blogs];
+                                copy[idx].imageUrl = e.target.value;
+                                if (!copy[idx].galleryImages) copy[idx].galleryImages = [];
+                                if (copy[idx].galleryImages.length === 0) copy[idx].galleryImages.push(e.target.value);
+                                else copy[idx].galleryImages[0] = e.target.value;
+                                updateField('blogs', null as any, copy);
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className="cursor-pointer inline-flex items-center gap-1 bg-white hover:bg-slate-50 border border-slate-200 px-3 py-2 text-xs font-semibold rounded whitespace-nowrap">
+                              <Upload size={12} className="text-ocean-accent" />
+                              <span>Upload Cover Image</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  handleFileUpload(e, (base64) => {
+                                    const copy = [...data.blogs];
+                                    copy[idx].imageUrl = base64;
+                                    if (!copy[idx].galleryImages) copy[idx].galleryImages = [];
+                                    if (copy[idx].galleryImages.length === 0) copy[idx].galleryImages.push(base64);
+                                    else copy[idx].galleryImages[0] = base64;
+                                    updateField('blogs', null as any, copy);
+                                  });
+                                }}
+                              />
+                            </label>
+                          </div>
+                          {post.imageUrl && (
+                            <div className="w-14 h-9 border rounded overflow-hidden shadow-xs bg-white">
+                              <img src={post.imageUrl} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       {/* Custom blog gallery layout with 30MB restrict */}
                       <div className="pt-4 border-t border-slate-100 bg-slate-50/50 p-4 rounded-lg">
                         <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">Blog Attachment Gallery (Images)</h4>
                         <p className="text-[10px] text-slate-540 mb-3">Configure up to 3 to 5 images per blog details sheet. Strictly Max 30 MB upload limit.</p>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {(post.galleryImages || []).map((galImg, gIdx) => (
-                            <div key={gIdx} className="bg-white border rounded shadow-xs p-2 space-y-2 flex flex-col justify-between">
-                              <div className="aspect-video w-full overflow-hidden border rounded bg-slate-150 relative">
-                                {galImg ? (
-                                  <img src={galImg} className="w-full h-full object-cover" alt="" />
-                                ) : (
-                                  <span className="text-[10px] text-slate-300 absolute inset-0 flex items-center justify-center">Empty</span>
-                                )}
-                              </div>
-                              <input
-                                type="text"
-                                className="w-full p-1 border rounded text-[10px] font-mono"
-                                value={galImg}
-                                onChange={(e) => {
-                                  const copy = [...data.blogs];
-                                  if (!copy[idx].galleryImages) copy[idx].galleryImages = [];
-                                  copy[idx].galleryImages[gIdx] = e.target.value;
-                                  if (gIdx === 0) copy[idx].imageUrl = e.target.value;
-                                  updateField('blogs', null as any, copy);
-                                }}
-                              />
+                          {(post.galleryImages || []).map((galImg, gIdx) => {
+                            const resolvedGalImg = galImg ? (resolveMediaLink(galImg, 'image').displayUrl || galImg) : '';
+                            return (
+                              <div key={gIdx} className="bg-white border rounded shadow-xs p-2 space-y-2 flex flex-col justify-between">
+                                <div className="aspect-video w-full overflow-hidden border rounded bg-slate-100 relative shadow-inner">
+                                  {galImg ? (
+                                    <img src={resolvedGalImg} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 absolute inset-0 flex items-center justify-center italic">No image / Empty</span>
+                                  )}
+                                </div>
+                                <input
+                                  type="text"
+                                  className="w-full p-1 border rounded text-[10px] font-mono"
+                                  placeholder="Paste cloud URL or uploaded local link..."
+                                  value={galImg}
+                                  onChange={(e) => {
+                                    const copy = [...data.blogs];
+                                    if (!copy[idx].galleryImages) copy[idx].galleryImages = [];
+                                    copy[idx].galleryImages[gIdx] = e.target.value;
+                                    if (gIdx === 0) copy[idx].imageUrl = e.target.value;
+                                    updateField('blogs', null as any, copy);
+                                  }}
+                                />
                               <div className="flex justify-between items-center pt-1.5">
                                 <label className="cursor-pointer inline-flex items-center gap-1 bg-slate-50 hover:bg-slate-100 px-2 py-1 text-[9px] font-semibold rounded border border-slate-200">
                                   <Upload size={10} className="text-ocean-accent" />
@@ -1639,7 +1928,8 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                                 </button>
                               </div>
                             </div>
-                          ))}
+                          );
+                        })}
                         </div>
                         <button
                           type="button"
@@ -1733,6 +2023,144 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                   </div>
                 </div>
 
+                {/* Brand new: Add Media via OneDrive, Google Drive or Cloud Link */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200 mt-4 space-y-3 font-sans">
+                  <h4 className="text-xs font-bold text-ocean-dark flex items-center gap-1">
+                    <span>🔗</span> Add Image or Video via Cloud Link (Google Drive / OneDrive / Dropbox / Web URLs)
+                  </h4>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    Paste a shared folder file url, Google Drive view path, OneDrive share URL, or direct media link. Standard OneDrive links are auto-converted to raw streaming URLs; Google Drive files load with custom fast pre-renditioning.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Item Title / Caption</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Laboratory Sample"
+                        className="w-full p-2 border border-slate-300 rounded text-xs"
+                        value={newLinkName}
+                        onChange={(e) => setNewLinkName(e.target.value)}
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Paste Cloud Sharing URL Link</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. https://drive.google.com/file/d/... or OneDrive short link"
+                        className="w-full p-2 border border-slate-300 rounded text-xs"
+                        value={newLinkUrl}
+                        onChange={(e) => setNewLinkUrl(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Realtime Live Link Parser & Checker Preview */}
+                  {newLinkUrl.trim() && (() => {
+                    const resolved = resolveMediaLink(newLinkUrl, newLinkType);
+                    return (
+                      <div className="bg-white border rounded-lg p-3 space-y-2 text-xs">
+                        <div className="flex items-center justify-between text-[11px] border-b pb-1">
+                          <span className="font-semibold text-slate-800">Detected Source: <span className="uppercase text-ocean-accent">{resolved.source}</span></span>
+                          <span className="text-slate-400">Auto-Resolved Preview</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5 text-[11px] text-slate-600">
+                            <p className="line-clamp-2"><strong>Sanitized URL:</strong> <span className="break-all font-mono text-[10px] bg-slate-50 border p-1 rounded block max-h-12 overflow-y-auto">{resolved.originalUrl}</span></p>
+                            <p className="line-clamp-2"><strong>Stream URL:</strong> <span className="break-all font-mono text-[10px] bg-slate-50 border p-1 rounded block max-h-12 overflow-y-auto">{resolved.directUrl}</span></p>
+                            <p><strong>Embeddable Frame:</strong> <span className="font-semibold text-slate-700">{resolved.isEmbeddable ? 'Yes (IFrame embedded player)' : 'No (Raw image/video tag stream)'}</span></p>
+                          </div>
+                          <div className="flex items-center justify-center bg-slate-900 rounded aspect-video overflow-hidden border border-slate-200">
+                            {newLinkType === 'video' ? (
+                              resolved.isEmbeddable ? (
+                                <iframe
+                                  src={resolved.embedUrl}
+                                  className="w-full h-full border-0 pointer-events-none"
+                                  title="Admin Live Preview"
+                                  allow="autoplay"
+                                />
+                              ) : (
+                                <video
+                                  src={resolved.directUrl}
+                                  className="w-full h-full object-cover"
+                                  muted
+                                  playsInline
+                                  controls={false}
+                                />
+                              )
+                            ) : (
+                              <img
+                                src={resolved.displayUrl}
+                                alt="Live Preview"
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = 'https://placehold.co/400x310/e2e8f0/475569?text=CORS+Isolated+Cloud+Media';
+                                }}
+                                referrerPolicy="no-referrer"
+                              />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="flex flex-wrap items-center justify-between pt-1 gap-4">
+                    <div className="flex items-center gap-4">
+                      <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="new-link-type"
+                          checked={newLinkType === 'image'}
+                          onChange={() => setNewLinkType('image')}
+                          className="text-ocean-accent focus:ring-ocean-accent"
+                        />
+                        Image Link
+                      </label>
+                      <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="new-link-type"
+                          checked={newLinkType === 'video'}
+                          onChange={() => setNewLinkType('video')}
+                          className="text-ocean-accent focus:ring-ocean-accent"
+                        />
+                        Video Link
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newLinkUrl.trim()) {
+                          showNotification('Please enter a valid URL link.', 'error');
+                          return;
+                        }
+                        const name = newLinkName.trim() || `Cloud Record (${newLinkType === 'video' ? 'Video' : 'Image'})`;
+                        
+                        const arch = { ...(data.archive || { title: "Archive & Field Records", description: "", items: [] }) };
+                        const newItem = {
+                          id: `arch-${Date.now()}`,
+                          name,
+                          mediaUrl: newLinkUrl.trim(),
+                          mediaType: newLinkType,
+                          fileSize: 0
+                        };
+                        arch.items = [...arch.items, newItem];
+                        setData(prev => ({
+                          ...prev,
+                          archive: arch
+                        }));
+                        setIsModified(true);
+                        setNewLinkUrl('');
+                        setNewLinkName('');
+                        showNotification('Cloud media link added to archive list. Press "Save Changes" on the panel to publish and sync live to other visitor browser windows!', 'success');
+                      }}
+                      className="px-3.5 py-1.5 bg-ocean-dark text-white rounded text-xs font-semibold hover:bg-ocean-accent transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={12} /> Add Link to Archive
+                    </button>
+                  </div>
+                </div>
+
                 <div className="border-t pt-6">
                   <div className="flex justify-between items-center mb-4">
                     <div>
@@ -1756,16 +2184,47 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                             return;
                           }
 
+                          showNotification(`Uploading "${file.name}" to the server...`, 'info');
+
                           const reader = new FileReader();
-                          reader.onloadend = () => {
-                            const mediaUrl = reader.result as string;
+                          reader.onloadend = async () => {
+                            const rawBase64 = reader.result as string;
                             const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+                            let finalUrl = rawBase64;
+
+                            try {
+                              const res = await fetch('/api/upload', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                  name: file.name,
+                                  type: file.type,
+                                  base64: rawBase64
+                                })
+                              });
+
+                              if (res.ok) {
+                                const result = await res.json();
+                                if (result && result.url) {
+                                  finalUrl = result.url;
+                                  showNotification(`"${file.name}" uploaded successfully!`, 'success');
+                                }
+                              } else {
+                                console.warn('Server archive upload failed, using local base64 fallback.');
+                                showNotification('Server upload bypassed, using local database draft instead.', 'info');
+                              }
+                            } catch (uploadErr) {
+                              console.error('Exception during archive upload:', uploadErr);
+                              showNotification('Using offline database storage due to link state.', 'info');
+                            }
                             
                             const arch = { ...(data.archive || { title: "Archive & Field Records", description: "", items: [] }) };
                             const newItem = {
                               id: `arch-${Date.now()}`,
                               name: file.name.replace(/\.[^/.]+$/, ""), // remove extension for cleaner default name
-                              mediaUrl,
+                              mediaUrl: finalUrl,
                               mediaType,
                               fileSize: file.size
                             };
@@ -1816,22 +2275,41 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                           </button>
 
                           <div className="w-full h-32 bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center relative">
-                            {item.mediaType === 'video' ? (
-                              <video
-                                src={item.mediaUrl}
-                                className="w-full h-full object-cover"
-                                controls={false}
-                                muted
-                                playsInline
-                              />
-                            ) : (
-                              <img
-                                src={item.mediaUrl}
-                                alt={item.name}
-                                className="w-full h-full object-cover"
-                                referrerPolicy="no-referrer"
-                              />
-                            )}
+                            {(() => {
+                              const resolved = resolveMediaLink(item.mediaUrl, item.mediaType);
+                              if (item.mediaType === 'video') {
+                                if (resolved.isEmbeddable) {
+                                  return (
+                                    <iframe 
+                                      src={resolved.embedUrl} 
+                                      className="w-full h-full border-0 scale-102 pointer-events-none" 
+                                      allow="autoplay"
+                                    />
+                                  );
+                                }
+                                return (
+                                  <video
+                                    src={resolved.directUrl}
+                                    className="w-full h-full object-cover"
+                                    controls={false}
+                                    muted
+                                    playsInline
+                                  />
+                                );
+                              } else {
+                                return (
+                                  <img
+                                    src={resolved.displayUrl || item.mediaUrl}
+                                    alt={item.name}
+                                    className="w-full h-full object-cover"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = 'https://placehold.co/400x310/e2e8f0/475569?text=CORS+Isolated+Cloud+Media';
+                                    }}
+                                  />
+                                );
+                              }
+                            })()}
                             <div className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded font-mono">
                               {item.mediaType.toUpperCase()} {item.fileSize ? `• ${(item.fileSize / (1024 * 1024)).toFixed(1)}MB` : ''}
                             </div>
@@ -1858,6 +2336,57 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                                 setIsModified(true);
                               }}
                             />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Source Link (Cloud Link or Uploaded URL)</label>
+                            <div className="flex gap-1.5 items-center">
+                              <input
+                                type="text"
+                                className="w-full p-1 border border-slate-300 rounded text-[11px] font-mono"
+                                value={item.mediaUrl}
+                                onChange={(e) => {
+                                  const arch = { ...(data.archive || { title: "", description: "", items: [] }) };
+                                  arch.items = arch.items.map(i => {
+                                    if (i.id === item.id) {
+                                      return { ...i, mediaUrl: e.target.value };
+                                    }
+                                    return i;
+                                  });
+                                  setData(prev => ({
+                                    ...prev,
+                                    archive: arch
+                                  }));
+                                  setIsModified(true);
+                                }}
+                              />
+                              <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-[10px] font-semibold rounded whitespace-nowrap text-slate-700">
+                                <Upload size={10} className="text-ocean-accent" />
+                                <span>Upload</span>
+                                <input
+                                  type="file"
+                                  accept="image/*,video/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    handleFileUpload(e, (base64) => {
+                                      const arch = { ...(data.archive || { title: "", description: "", items: [] }) };
+                                      const mediaType = e.target.files?.[0].type.startsWith('video/') ? 'video' : 'image';
+                                      arch.items = arch.items.map(i => {
+                                        if (i.id === item.id) {
+                                          return { ...i, mediaUrl: base64, mediaType, fileSize: e.target.files?.[0].size };
+                                        }
+                                        return i;
+                                      });
+                                      setData(prev => ({
+                                        ...prev,
+                                        archive: arch
+                                      }));
+                                      setIsModified(true);
+                                    });
+                                  }}
+                                />
+                              </label>
+                            </div>
                           </div>
                         </div>
                       ))}

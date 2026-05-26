@@ -107,6 +107,29 @@ export default function App() {
     initData();
   }, []);
 
+  // Periodic background check to fetch fresh published data (Real-Time Sync for multi-user tabs)
+  useEffect(() => {
+    if (isAdminMode) return; // Prevent overwriting while administrator is editing draft changes
+
+    const intervalId = setInterval(async () => {
+      try {
+        const response = await fetch('/api/site-data');
+        if (response.ok) {
+          const freshData = await response.json();
+          // Match and refresh ONLY when data actually differs to optimize browser performance
+          if (freshData && freshData.hero && JSON.stringify(freshData) !== JSON.stringify(data)) {
+            setData(freshData);
+            await saveToIndexedDB('academic_portfolio_site_data_v4', freshData);
+          }
+        }
+      } catch (err) {
+        // Silently swallow network drops
+      }
+    }, 8000);
+
+    return () => clearInterval(intervalId);
+  }, [isAdminMode, data]);
+
   const handleSaveData = async (updatedData: SiteData): Promise<boolean> => {
     try {
       setData(updatedData);

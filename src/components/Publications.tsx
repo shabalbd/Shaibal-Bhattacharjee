@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Layers, Users, BookOpen, ExternalLink } from 'lucide-react';
+import { FileText, Layers, Users, BookOpen, ExternalLink, Presentation, Book, Database, Code, GraduationCap, Binary } from 'lucide-react';
 import { PublicationItem, PublicationsConfig } from '../types';
 import { formatAmpersand } from './Ampersand';
 
@@ -10,8 +10,16 @@ interface PublicationsProps {
 
 export default function Publications({ publicationsConfig, publications }: PublicationsProps) {
   const articles = publications.filter((p) => p.type === 'article');
+  const preprints = publications.filter((p) => p.type === 'preprint');
   const conferences = publications.filter((p) => p.type === 'conference');
+  const presentations = publications.filter((p) => p.type === 'presentation');
+  const posters = publications.filter((p) => p.type === 'poster');
   const workshops = publications.filter((p) => p.type === 'workshop');
+  const books = publications.filter((p) => p.type === 'book');
+  const data = publications.filter((p) => p.type === 'data');
+  const code = publications.filter((p) => p.type === 'code');
+  const thesis = publications.filter((p) => p.type === 'thesis');
+  const dataArticles = publications.filter((p) => p.type === 'data-article');
 
   const renderPubItem = (pub: PublicationItem) => {
     return (
@@ -111,8 +119,16 @@ export default function Publications({ publicationsConfig, publications }: Publi
 
         {/* Dynamic Category groups */}
         {renderSection("Articles", articles, <Layers size={18} className="text-ocean-accent shrink-0" />)}
+        {renderSection("Preprints", preprints, <FileText size={18} className="text-ocean-accent shrink-0" />)}
         {renderSection("Conferences/Seminars", conferences, <Users size={18} className="text-ocean-accent shrink-0" />)}
+        {renderSection("Presentations", presentations, <Presentation size={18} className="text-ocean-accent shrink-0" />)}
+        {renderSection("Posters", posters, <FileText size={18} className="text-ocean-accent shrink-0" />)}
         {renderSection("Workshops", workshops, <BookOpen size={18} className="text-ocean-accent shrink-0" />)}
+        {renderSection("Books", books, <Book size={18} className="text-ocean-accent shrink-0" />)}
+        {renderSection("Data", data, <Database size={18} className="text-ocean-accent shrink-0" />)}
+        {renderSection("Code", code, <Code size={18} className="text-ocean-accent shrink-0" />)}
+        {renderSection("Thesis", thesis, <GraduationCap size={18} className="text-ocean-accent shrink-0" />)}
+        {renderSection("Data Articles", dataArticles, <Binary size={18} className="text-ocean-accent shrink-0" />)}
 
       </div>
     </section>
