@@ -1111,6 +1111,11 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                             <option value="presentation">Presentation</option>
                             <option value="poster">Poster</option>
                             <option value="workshop">Training Workshop</option>
+                            <option value="book">Books</option>
+                            <option value="data">Data</option>
+                            <option value="code">Code</option>
+                            <option value="thesis">Thesis</option>
+                            <option value="data-article">Data Article</option>
                           </select>
                         </div>
                         <div>

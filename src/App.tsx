@@ -17,6 +17,10 @@ import Footer from './components/Footer';
 import LoginModal from './components/LoginModal';
 import AdminPanel from './components/AdminPanel';
 
+const API_URL = (import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL && import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL.startsWith('http')) 
+  ? import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL 
+  : '/api/site-data';
+
 export default function App() {
   const [data, setData] = useState<SiteData | null>(null);
   const [isAdminMode, setIsAdminMode] = useState(false);
@@ -28,7 +32,7 @@ export default function App() {
       try {
         let serverData: SiteData | null = null;
         try {
-          const response = await fetch('/api/site-data');
+          const response = await fetch(API_URL);
           if (response.ok) {
             serverData = await response.json();
           }
@@ -72,7 +76,7 @@ export default function App() {
             setData(merged);
             await saveToIndexedDB('academic_portfolio_site_data_v4', merged);
             try {
-              await fetch('/api/site-data', {
+              await fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(merged),
@@ -89,7 +93,7 @@ export default function App() {
           const newTemplate = JSON.parse(JSON.stringify(INITIAL_DATA));
           setData(newTemplate);
           try {
-            await fetch('/api/site-data', {
+            await fetch(API_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(newTemplate),
@@ -113,7 +117,7 @@ export default function App() {
 
     const intervalId = setInterval(async () => {
       try {
-        const response = await fetch('/api/site-data');
+        const response = await fetch(API_URL);
         if (response.ok) {
           const freshData = await response.json();
           // Match and refresh ONLY when data actually differs to optimize browser performance
@@ -137,7 +141,7 @@ export default function App() {
       await saveToIndexedDB('academic_portfolio_site_data_v4', updatedData);
 
       // Save to server-side filesystem store so other devices and visitors load it
-      const response = await fetch('/api/site-data', {
+      const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -158,8 +162,10 @@ export default function App() {
       await removeFromIndexedDB('academic_portfolio_site_data_v4');
       localStorage.removeItem('academic_portfolio_site_data_v3');
       
-      await fetch('/api/site-data/reset', {
+      await fetch(API_URL, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(INITIAL_DATA),
       });
     } catch (e) {
       console.error('Error resetting site modifications:', e);

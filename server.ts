@@ -21,7 +21,21 @@ async function startServer() {
   app.use("/api/uploads", express.static(UPLOADS_DIR));
 
   // Helper to read persisted website content
-  const loadSiteData = (): any => {
+  const loadSiteData = async (): Promise<any> => {
+    if (process.env.GOOGLE_APPS_SCRIPT_URL && process.env.GOOGLE_APPS_SCRIPT_URL.startsWith('http')) {
+      try {
+        const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL);
+        if (response.ok) {
+          const data = await response.json();
+          if (data && !data.error) {
+            return data;
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching from Google Apps Script, falling back to local file:", err);
+      }
+    }
+
     try {
       if (fs.existsSync(DATA_FILE_PATH)) {
         const fileContent = fs.readFileSync(DATA_FILE_PATH, "utf-8");
@@ -34,7 +48,27 @@ async function startServer() {
   };
 
   // Helper to save website content
-  const saveSiteData = (data: any): boolean => {
+  const saveSiteData = async (data: any): Promise<boolean> => {
+    if (process.env.GOOGLE_APPS_SCRIPT_URL && process.env.GOOGLE_APPS_SCRIPT_URL.startsWith('http')) {
+      try {
+        const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+        if (response.ok) {
+          const result = await response.json();
+          if (result && result.success) {
+            // Also write to local file as backup
+            fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
+            return true;
+          }
+        }
+      } catch (err) {
+        console.error("Error saving to Google Apps Script, falling back to local file only:", err);
+      }
+    }
+
     try {
       fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
       return true;
@@ -45,18 +79,18 @@ async function startServer() {
   };
 
   // API Endpoints for site customization
-  app.get("/api/site-data", (req, res) => {
-    const currentData = loadSiteData();
+  app.get("/api/site-data", async (req, res) => {
+    const currentData = await loadSiteData();
     res.json(currentData);
   });
 
-  app.post("/api/site-data", (req, res) => {
+  app.post("/api/site-data", async (req, res) => {
     const clientData = req.body;
     if (!clientData || typeof clientData !== "object" || !clientData.hero || !clientData.about) {
       return res.status(400).json({ error: "Invalid website database payload." });
     }
 
-    const isSaved = saveSiteData(clientData);
+    const isSaved = await saveSiteData(clientData);
     if (isSaved) {
       res.json({ success: true });
     } else {
