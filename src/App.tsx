@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { INITIAL_DATA } from './initialData';
 import { SiteData } from './types';
-import { saveToIndexedDB, getFromIndexedDB, removeFromIndexedDB } from './utils/db';
+import { saveToIndexedDB, getFromIndexedDB, removeFromIndexedDB, smartMergeData } from './utils/db';
 
 // Importing extracted functional modules
 import Navbar from './components/Navbar';
@@ -52,9 +52,15 @@ export default function App() {
           // Migrate name to Shaibal Bhattacharjee automatically if stored as older initials
           if (parsed.hero.name === "S. Bhattacharjee") {
             parsed.hero.name = "Shaibal Bhattacharjee";
-            await saveToIndexedDB('academic_portfolio_site_data_v4', parsed);
           }
-          setData(parsed);
+          // Recursively overlay any new additions/updates made in INITIAL_DATA codebase
+          const { merged, updated } = smartMergeData(parsed, INITIAL_DATA);
+          if (updated) {
+            await saveToIndexedDB('academic_portfolio_site_data_v4', merged);
+            setData(merged);
+          } else {
+            setData(parsed);
+          }
         } else {
           // Initialize fresh template
           setData(JSON.parse(JSON.stringify(INITIAL_DATA)));
