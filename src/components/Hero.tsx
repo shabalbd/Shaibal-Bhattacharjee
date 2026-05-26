@@ -138,7 +138,7 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
           </div>
 
           {/* Right Presentation Picture sequencing */}
-          <div className="hidden md:flex flex-col items-center flex-shrink-0 relative group">
+          <div className="flex flex-col items-center flex-shrink-0 relative group w-full md:w-auto mt-8 md:mt-0">
             <div className="w-64 h-80 md:w-80 md:h-[26rem] relative">
               {/* Blur back glow */}
               <div className="absolute inset-0 bg-ocean-accent/25 rounded-2xl blur-3xl transform translate-x-4 translate-y-4 group-hover:translate-x-2 group-hover:translate-y-2 transition-transform duration-500" />

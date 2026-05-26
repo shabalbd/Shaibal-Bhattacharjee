@@ -22,28 +22,40 @@ export default function App() {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
-  // Initialize and load persisted dataset from IndexedDB (with localStorage migration fallback)
+  // Initialize and load persisted dataset from server store (with IndexedDB fallback)
   useEffect(() => {
     const initData = async () => {
       try {
-        // 1. Try to load from expanded IndexedDB database first
-        let parsed = await getFromIndexedDB('academic_portfolio_site_data_v4');
+        let serverData: SiteData | null = null;
+        try {
+          const response = await fetch('/api/site-data');
+          if (response.ok) {
+            serverData = await response.json();
+          }
+        } catch (fetchErr) {
+          console.warn('Could not contact backend API, checking browser database fallback...', fetchErr);
+        }
 
-        // 2. Migration fallback: If IndexedDB is empty, check old localStorage
+        let parsed = serverData;
+
+        // If server data couldn't load (e.g., offline/errors), query IndexedDB fallback
         if (!parsed) {
-          const legacySaved = localStorage.getItem('academic_portfolio_site_data_v3');
-          if (legacySaved) {
-            try {
-              const legacyParsed = JSON.parse(legacySaved);
-              if (legacyParsed && legacyParsed.hero && legacyParsed.about) {
-                parsed = legacyParsed;
-                // Migrate to new storage engine
-                await saveToIndexedDB('academic_portfolio_site_data_v4', parsed);
-                // Clean up old restrictively limited storage block
-                localStorage.removeItem('academic_portfolio_site_data_v3');
+          parsed = await getFromIndexedDB('academic_portfolio_site_data_v4');
+
+          // Migration fallback: If IndexedDB is empty, check old localStorage
+          if (!parsed) {
+            const legacySaved = localStorage.getItem('academic_portfolio_site_data_v3');
+            if (legacySaved) {
+              try {
+                const legacyParsed = JSON.parse(legacySaved);
+                if (legacyParsed && legacyParsed.hero && legacyParsed.about) {
+                  parsed = legacyParsed;
+                  await saveToIndexedDB('academic_portfolio_site_data_v4', parsed);
+                  localStorage.removeItem('academic_portfolio_site_data_v3');
+                }
+              } catch (err) {
+                console.warn('Failed to parse previous legacy site data from localStorage.', err);
               }
-            } catch (err) {
-              console.warn('Failed to parse previous legacy site data from localStorage.', err);
             }
           }
         }
@@ -55,15 +67,36 @@ export default function App() {
           }
           // Recursively overlay any new additions/updates made in INITIAL_DATA codebase
           const { merged, updated } = smartMergeData(parsed, INITIAL_DATA);
+          
           if (updated) {
-            await saveToIndexedDB('academic_portfolio_site_data_v4', merged);
             setData(merged);
+            await saveToIndexedDB('academic_portfolio_site_data_v4', merged);
+            try {
+              await fetch('/api/site-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(merged),
+              });
+            } catch (syncErr) {
+              console.warn('Could not sync updated master structure to backend:', syncErr);
+            }
           } else {
             setData(parsed);
+            await saveToIndexedDB('academic_portfolio_site_data_v4', parsed);
           }
         } else {
           // Initialize fresh template
-          setData(JSON.parse(JSON.stringify(INITIAL_DATA)));
+          const newTemplate = JSON.parse(JSON.stringify(INITIAL_DATA));
+          setData(newTemplate);
+          try {
+            await fetch('/api/site-data', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newTemplate),
+            });
+          } catch (syncErr) {
+            console.warn('Could not save fresh template to backend:', syncErr);
+          }
         }
       } catch (err) {
         console.error('Error during database initialization:', err);
@@ -77,19 +110,37 @@ export default function App() {
   const handleSaveData = async (updatedData: SiteData): Promise<boolean> => {
     try {
       setData(updatedData);
-      const success = await saveToIndexedDB('academic_portfolio_site_data_v4', updatedData);
-      return success;
+      // Save local IndexedDB first for fast local caching
+      await saveToIndexedDB('academic_portfolio_site_data_v4', updatedData);
+
+      // Save to server-side filesystem store so other devices and visitors load it
+      const response = await fetch('/api/site-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedData),
+      });
+
+      return response.ok;
     } catch (e) {
-      console.error('Failed to save to browser database:', e);
-      setData(updatedData);
+      console.error('Failed to save to server and browser database:', e);
       return false;
     }
   };
 
   const handleResetData = async () => {
-    setData(JSON.parse(JSON.stringify(INITIAL_DATA)));
-    await removeFromIndexedDB('academic_portfolio_site_data_v4');
-    localStorage.removeItem('academic_portfolio_site_data_v3');
+    try {
+      setData(JSON.parse(JSON.stringify(INITIAL_DATA)));
+      await removeFromIndexedDB('academic_portfolio_site_data_v4');
+      localStorage.removeItem('academic_portfolio_site_data_v3');
+      
+      await fetch('/api/site-data/reset', {
+        method: 'POST',
+      });
+    } catch (e) {
+      console.error('Error resetting site modifications:', e);
+    }
   };
 
   if (!data) {
