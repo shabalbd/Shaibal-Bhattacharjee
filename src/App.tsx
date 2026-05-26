@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { INITIAL_DATA } from './initialData';
 import { SiteData } from './types';
-import { saveToIndexedDB, getFromIndexedDB, removeFromIndexedDB, smartMergeData } from './utils/db';
+import { smartMergeData } from './utils/db';
 
 // Importing extracted functional modules
 import Navbar from './components/Navbar';
@@ -34,7 +34,7 @@ export default function App() {
     }
   };
 
-  // Initialize and load persisted dataset from server store (with IndexedDB fallback)
+  // Initialize and load persisted dataset from server store
   useEffect(() => {
     const initData = async () => {
       try {
@@ -48,32 +48,10 @@ export default function App() {
             }
           }
         } catch (fetchErr) {
-          console.warn('Could not contact API, checking browser database fallback...', fetchErr);
+          console.warn('Could not contact API...', fetchErr);
         }
 
         let parsed = serverData;
-
-        // If server data couldn't load (e.g., offline/errors), query IndexedDB fallback
-        if (!parsed) {
-          parsed = await getFromIndexedDB('academic_portfolio_site_data_v4');
-
-          // Migration fallback: If IndexedDB is empty, check old localStorage
-          if (!parsed) {
-            const legacySaved = localStorage.getItem('academic_portfolio_site_data_v3');
-            if (legacySaved) {
-              try {
-                const legacyParsed = JSON.parse(legacySaved);
-                if (legacyParsed && legacyParsed.hero && legacyParsed.about) {
-                  parsed = legacyParsed;
-                  await saveToIndexedDB('academic_portfolio_site_data_v4', parsed);
-                  localStorage.removeItem('academic_portfolio_site_data_v3');
-                }
-              } catch (err) {
-                console.warn('Failed to parse previous legacy site data from localStorage.', err);
-              }
-            }
-          }
-        }
 
         if (parsed && parsed.hero && parsed.about && parsed.publications) {
           // Migrate name to Shaibal Bhattacharjee automatically if stored as older initials
@@ -85,17 +63,16 @@ export default function App() {
           
           if (updated) {
             setData(merged);
-            await saveToIndexedDB('academic_portfolio_site_data_v4', merged);
             try {
               await fetch(apiUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                mode: apiUrl.startsWith('http') ? 'no-cors' : 'cors',
+                headers: { 'Content-Type': apiUrl.startsWith('http') ? 'text/plain;charset=utf-8' : 'application/json' },
                 body: JSON.stringify(merged),
               });
             } catch(e) {}
           } else {
             setData(parsed);
-            await saveToIndexedDB('academic_portfolio_site_data_v4', parsed);
           }
         } else {
           // Initialize fresh template
@@ -104,7 +81,8 @@ export default function App() {
           try {
             await fetch(apiUrl, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              mode: apiUrl.startsWith('http') ? 'no-cors' : 'cors',
+              headers: { 'Content-Type': apiUrl.startsWith('http') ? 'text/plain;charset=utf-8' : 'application/json' },
               body: JSON.stringify(newTemplate),
             });
           } catch(e) {}
@@ -129,7 +107,6 @@ export default function App() {
            const freshData = await response.json();
            if (freshData && freshData.hero && !freshData.error && JSON.stringify(freshData) !== JSON.stringify(data)) {
              setData(freshData);
-             await saveToIndexedDB('academic_portfolio_site_data_v4', freshData);
            }
         }
       } catch (err) {
@@ -143,19 +120,18 @@ export default function App() {
   const handleSaveData = async (updatedData: SiteData): Promise<boolean> => {
     try {
       setData(updatedData);
-      // Save local IndexedDB first for fast local caching
-      await saveToIndexedDB('academic_portfolio_site_data_v4', updatedData);
-
+      
       // Save to server-side filesystem store so other devices and visitors load it
       const response = await fetch(apiUrl, {
         method: 'POST',
+        mode: apiUrl.startsWith('http') ? 'no-cors' : 'cors',
         headers: {
-           'Content-Type': 'application/json',
+           'Content-Type': apiUrl.startsWith('http') ? 'text/plain;charset=utf-8' : 'application/json',
         },
         body: JSON.stringify(updatedData),
       });
 
-      return response.ok;
+      return response.ok || response.type === 'opaque';
     } catch (e) {
       console.error('Failed to save to server and browser database:', e);
       return false;
@@ -165,12 +141,12 @@ export default function App() {
   const handleResetData = async () => {
     try {
       setData(JSON.parse(JSON.stringify(INITIAL_DATA)));
-      await removeFromIndexedDB('academic_portfolio_site_data_v4');
       localStorage.removeItem('academic_portfolio_site_data_v3');
       
       await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        mode: apiUrl.startsWith('http') ? 'no-cors' : 'cors',
+        headers: { 'Content-Type': apiUrl.startsWith('http') ? 'text/plain;charset=utf-8' : 'application/json' },
         body: JSON.stringify(INITIAL_DATA),
       });
     } catch (e) {

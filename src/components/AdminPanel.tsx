@@ -96,9 +96,9 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
     const success = await onSave(data);
     if (success) {
       setIsModified(false);
-      showNotification('All modifications saved to your browser database successfully! Local storage limit is expanded up to 5 GB.', 'success');
+      showNotification('All modifications saved to your Google Sheets database successfully!', 'success');
     } else {
-      showNotification('Save failed: Unable to save to the browser database. Please check your available disk storage space.', 'error');
+      showNotification('Save failed: Unable to sync with Google Apps Script Web App. Please check your external database URL and permissions.', 'error');
     }
   };
 
