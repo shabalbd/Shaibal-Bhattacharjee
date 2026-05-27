@@ -23,14 +23,18 @@ export default function App() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   // Load Google Apps Script Webhook URL from env or local storage
-  const [apiUrl, setApiUrl] = useState<string>(() => {
-    return import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL || localStorage.getItem('academic_portfolio_api_url') || '/api/site-data';
+  const [externalApiUrl, setExternalApiUrl] = useState<string>(() => {
+    const rawVal = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL || localStorage.getItem('academic_portfolio_api_url') || '';
+    if (rawVal === '/api/site-data') return '';
+    return rawVal;
   });
 
-  const updateApiUrl = (url: string) => {
-    setApiUrl(url);
+  const updateExternalApiUrl = (url: string) => {
+    setExternalApiUrl(url);
     if (url.startsWith('http')) {
       localStorage.setItem('academic_portfolio_api_url', url);
+    } else {
+      localStorage.removeItem('academic_portfolio_api_url');
     }
   };
 
@@ -40,7 +44,11 @@ export default function App() {
       try {
         let serverData: SiteData | null = null;
         try {
-          const fetchUrl = apiUrl.startsWith('http') ? `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}t=${new Date().getTime()}` : apiUrl;
+          const baseFetchUrl = '/api/site-data';
+          const fetchUrl = externalApiUrl 
+            ? `${baseFetchUrl}?externalUrl=${encodeURIComponent(externalApiUrl)}&t=${new Date().getTime()}`
+            : `${baseFetchUrl}?t=${new Date().getTime()}`;
+          
           const response = await fetch(fetchUrl, { cache: 'no-store' });
           if (response.ok) {
             const rawData = await response.json();
@@ -65,11 +73,10 @@ export default function App() {
           if (updated) {
             setData(merged);
             try {
-              await fetch(apiUrl, {
+              await fetch('/api/site-data', {
                 method: 'POST',
-                mode: apiUrl.startsWith('http') ? 'no-cors' : 'cors',
-                headers: { 'Content-Type': apiUrl.startsWith('http') ? 'text/plain;charset=utf-8' : 'application/json' },
-                body: JSON.stringify(merged),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: merged, externalUrl: externalApiUrl }),
               });
             } catch(e) {}
           } else {
@@ -80,11 +87,10 @@ export default function App() {
           const newTemplate = JSON.parse(JSON.stringify(INITIAL_DATA));
           setData(newTemplate);
           try {
-            await fetch(apiUrl, {
+            await fetch('/api/site-data', {
               method: 'POST',
-              mode: apiUrl.startsWith('http') ? 'no-cors' : 'cors',
-              headers: { 'Content-Type': apiUrl.startsWith('http') ? 'text/plain;charset=utf-8' : 'application/json' },
-              body: JSON.stringify(newTemplate),
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ data: newTemplate, externalUrl: externalApiUrl }),
             });
           } catch(e) {}
         }
@@ -95,15 +101,19 @@ export default function App() {
     };
 
     initData();
-  }, [apiUrl]);
+  }, [externalApiUrl]);
 
   // Periodic background check to fetch fresh published data (Real-Time Sync for multi-user tabs)
   useEffect(() => {
-    if (isAdminMode || !apiUrl.startsWith('http')) return; // Prevent overwriting while administrator is editing draft changes
+    if (isAdminMode) return; // Prevent overwriting while administrator is editing draft changes
 
     const intervalId = setInterval(async () => {
       try {
-        const fetchUrl = apiUrl.startsWith('http') ? `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}t=${new Date().getTime()}` : apiUrl;
+        const baseFetchUrl = '/api/site-data';
+        const fetchUrl = externalApiUrl 
+          ? `${baseFetchUrl}?externalUrl=${encodeURIComponent(externalApiUrl)}&t=${new Date().getTime()}`
+          : `${baseFetchUrl}?t=${new Date().getTime()}`;
+        
         const response = await fetch(fetchUrl, { cache: 'no-store' });
         if (response.ok) {
            const freshData = await response.json();
@@ -117,25 +127,23 @@ export default function App() {
     }, 15000);
 
     return () => clearInterval(intervalId);
-  }, [isAdminMode, data, apiUrl]);
+  }, [isAdminMode, data, externalApiUrl]);
 
   const handleSaveData = async (updatedData: SiteData): Promise<boolean> => {
     try {
       setData(updatedData);
       
-      // Save to server-side filesystem store so other devices and visitors load it
-      const response = await fetch(apiUrl, {
+      const response = await fetch('/api/site-data', {
         method: 'POST',
-        mode: apiUrl.startsWith('http') ? 'no-cors' : 'cors',
         headers: {
-           'Content-Type': apiUrl.startsWith('http') ? 'text/plain;charset=utf-8' : 'application/json',
+           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updatedData),
+        body: JSON.stringify({ data: updatedData, externalUrl: externalApiUrl }),
       });
 
-      return response.ok || response.type === 'opaque';
+      return response.ok;
     } catch (e) {
-      console.error('Failed to save to server and browser database:', e);
+      console.error('Failed to save to server database:', e);
       return false;
     }
   };
@@ -145,11 +153,15 @@ export default function App() {
       setData(JSON.parse(JSON.stringify(INITIAL_DATA)));
       localStorage.removeItem('academic_portfolio_site_data_v3');
       
-      await fetch(apiUrl, {
+      await fetch('/api/site-data/reset', {
         method: 'POST',
-        mode: apiUrl.startsWith('http') ? 'no-cors' : 'cors',
-        headers: { 'Content-Type': apiUrl.startsWith('http') ? 'text/plain;charset=utf-8' : 'application/json' },
-        body: JSON.stringify(INITIAL_DATA),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      await fetch('/api/site-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: INITIAL_DATA, externalUrl: externalApiUrl }),
       });
     } catch (e) {
       console.error('Error resetting site modifications:', e);
@@ -202,8 +214,8 @@ export default function App() {
       {/* Access validation dialog overlay */}
       {isLoginOpen && (
         <LoginModal
-          apiUrl={apiUrl}
-          setApiUrl={updateApiUrl}
+          apiUrl={externalApiUrl}
+          setApiUrl={updateExternalApiUrl}
           onLogin={() => {
             setIsAdminMode(true);
             setIsLoginOpen(false);

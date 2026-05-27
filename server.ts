@@ -21,10 +21,19 @@ async function startServer() {
   app.use("/api/uploads", express.static(UPLOADS_DIR));
 
   // Helper to read persisted website content
-  const loadSiteData = async (): Promise<any> => {
-    if (process.env.GOOGLE_APPS_SCRIPT_URL && process.env.GOOGLE_APPS_SCRIPT_URL.startsWith('http')) {
+  const loadSiteData = async (customUrl?: string): Promise<any> => {
+    const targetUrl = (customUrl && customUrl.startsWith('http')) 
+      ? customUrl 
+      : (process.env.GOOGLE_APPS_SCRIPT_URL && process.env.GOOGLE_APPS_SCRIPT_URL.startsWith('http'))
+        ? process.env.GOOGLE_APPS_SCRIPT_URL
+        : null;
+
+    if (targetUrl) {
       try {
-        const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s
+        const response = await fetch(targetUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
         if (response.ok) {
           const data = await response.json();
           if (data && !data.error) {
@@ -48,21 +57,40 @@ async function startServer() {
   };
 
   // Helper to save website content
-  const saveSiteData = async (data: any): Promise<boolean> => {
-    if (process.env.GOOGLE_APPS_SCRIPT_URL && process.env.GOOGLE_APPS_SCRIPT_URL.startsWith('http')) {
+  const saveSiteData = async (data: any, customUrl?: string): Promise<boolean> => {
+    const targetUrl = (customUrl && customUrl.startsWith('http')) 
+      ? customUrl 
+      : (process.env.GOOGLE_APPS_SCRIPT_URL && process.env.GOOGLE_APPS_SCRIPT_URL.startsWith('http'))
+        ? process.env.GOOGLE_APPS_SCRIPT_URL
+        : null;
+
+    if (targetUrl) {
       try {
-        const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL, {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds timeout
+        const response = await fetch(targetUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data)
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(data),
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
+        
         if (response.ok) {
-          const result = await response.json();
-          if (result && result.success) {
-            // Also write to local file as backup
-            fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
-            return true;
+          try {
+            const result = await response.json();
+            console.log("Save response from Google Apps Script:", result);
+          } catch (jsonErr) {
+            // In case response is successfully received but is not standard JSON (e.g., text, empty)
           }
+          // Also write to local file as backup
+          fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
+          return true;
+        } else if (response.status === 200) {
+          fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
+          return true;
+        } else {
+          console.warn(`Response status was not ok: ${response.status} ${response.statusText}`);
         }
       } catch (err) {
         console.error("Error saving to Google Apps Script, falling back to local file only:", err);
@@ -80,21 +108,34 @@ async function startServer() {
 
   // API Endpoints for site customization
   app.get("/api/site-data", async (req, res) => {
-    const currentData = await loadSiteData();
+    const customUrl = req.query.externalUrl as string | undefined;
+    const currentData = await loadSiteData(customUrl);
     res.json(currentData);
   });
 
   app.post("/api/site-data", async (req, res) => {
-    const clientData = req.body;
-    if (!clientData || typeof clientData !== "object" || !clientData.hero || !clientData.about) {
-      return res.status(400).json({ error: "Invalid website database payload." });
-    }
+    try {
+      let clientData = req.body;
+      let customUrl = req.query.externalUrl as string | undefined;
 
-    const isSaved = await saveSiteData(clientData);
-    if (isSaved) {
-      res.json({ success: true });
-    } else {
-      res.status(500).json({ error: "Failed to write data modifications to server filesystem." });
+      if (clientData && typeof clientData === 'object' && ('data' in clientData)) {
+        customUrl = clientData.externalUrl;
+        clientData = clientData.data;
+      }
+
+      if (!clientData || typeof clientData !== "object" || !clientData.hero || !clientData.about) {
+        return res.status(400).json({ error: "Invalid website database payload." });
+      }
+
+      const isSaved = await saveSiteData(clientData, customUrl);
+      if (isSaved) {
+        res.json({ success: true });
+      } else {
+        res.status(500).json({ error: "Failed to write data modifications to server filesystem." });
+      }
+    } catch (e: any) {
+      console.error("Crash inside post handler", e);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
