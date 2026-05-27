@@ -40,7 +40,8 @@ export default function App() {
       try {
         let serverData: SiteData | null = null;
         try {
-          const response = await fetch(apiUrl);
+          const fetchUrl = apiUrl.startsWith('http') ? `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}t=${new Date().getTime()}` : apiUrl;
+          const response = await fetch(fetchUrl, { cache: 'no-store' });
           if (response.ok) {
             const rawData = await response.json();
             if (rawData && !rawData.error) {
@@ -102,7 +103,8 @@ export default function App() {
 
     const intervalId = setInterval(async () => {
       try {
-        const response = await fetch(apiUrl);
+        const fetchUrl = apiUrl.startsWith('http') ? `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}t=${new Date().getTime()}` : apiUrl;
+        const response = await fetch(fetchUrl, { cache: 'no-store' });
         if (response.ok) {
            const freshData = await response.json();
            if (freshData && freshData.hero && !freshData.error && JSON.stringify(freshData) !== JSON.stringify(data)) {
