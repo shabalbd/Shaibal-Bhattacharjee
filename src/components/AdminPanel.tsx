@@ -1119,10 +1119,30 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-slate-500 mb-1">Review/Publishing Status</label>
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="block text-xs font-semibold text-slate-500">Review/Publishing Status</label>
+                            {pub.status === 'Not Applicable' && (
+                              <button
+                                type="button"
+                                className="text-[10px] text-ocean-accent hover:underline font-semibold cursor-pointer"
+                                onClick={() => {
+                                  const copy = [...data.publications];
+                                  copy[idx].status = 'In Preparation';
+                                  updateField('publications', null as any, copy);
+                                }}
+                              >
+                                Enable Edit
+                              </button>
+                            )}
+                          </div>
                           <select
-                            className="w-full p-2 border border-slate-300 bg-white rounded text-xs cursor-pointer"
+                            className={`w-full p-2 border bg-white rounded text-xs transition-colors ${
+                              pub.status === 'Not Applicable'
+                                ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                                : 'border-slate-300 cursor-pointer'
+                            }`}
                             value={pub.status}
+                            disabled={pub.status === 'Not Applicable'}
                             onChange={(e) => {
                               const copy = [...data.publications];
                               copy[idx].status = e.target.value as any;
@@ -1132,6 +1152,7 @@ export default function AdminPanel({ initialData, onSave, onReset, onLogout }: A
                             <option value="Published">Published / In Press</option>
                             <option value="Under Review">Under Peer Review</option>
                             <option value="In Preparation">Manuscript In Preparation</option>
+                            <option value="Not Applicable">Not Applicable</option>
                           </select>
                         </div>
                       </div>

@@ -52,7 +52,7 @@ export interface PublicationItem {
   volume?: string;
   issue?: string;
   pages?: string;
-  status: 'Published' | 'Under Review' | 'In Preparation';
+  status: 'Published' | 'Under Review' | 'In Preparation' | 'Not Applicable';
   doi?: string;
   type: 'article' | 'conference' | 'workshop' | 'preprint' | 'presentation' | 'poster' | 'book' | 'data' | 'code' | 'thesis' | 'data-article';
   publishedDate?: string;

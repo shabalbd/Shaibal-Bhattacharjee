@@ -48,47 +48,61 @@ export default function Methodology({ methodologyConfig, skills }: MethodologyPr
     }
   };
 
+  const hasTitle = !!(methodologyConfig?.title && methodologyConfig.title.trim() !== '');
+  const hasDescription = !!(methodologyConfig?.description && methodologyConfig.description.trim() !== '');
+  const hasSkills = Array.isArray(skills) && skills.some(cat => cat && Array.isArray(cat.skills) && cat.skills.length > 0);
+
+  if (!hasTitle && !hasDescription && !hasSkills) return null;
+
   return (
     <section id="skills" className="py-20 bg-slate-50 ocean-grid">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Header section formatting */}
-        <div className="text-center mb-16">
-          <h2 className="text-3xl font-serif font-bold text-ocean-dark mb-4">
-            {formatAmpersand(methodologyConfig.title)}
-          </h2>
-          <p className="text-slate-600 max-w-2xl mx-auto text-sm md:text-base font-light">
-            {methodologyConfig.description}
-          </p>
-          <div className="w-16 h-1 bg-ocean-accent mx-auto rounded-full mt-4" />
-        </div>
+        {(hasTitle || hasDescription) && (
+          <div className="text-center mb-16">
+            {hasTitle && (
+              <h2 className="text-3xl font-serif font-bold text-ocean-dark mb-4">
+                {formatAmpersand(methodologyConfig.title)}
+              </h2>
+            )}
+            {hasDescription && (
+              <p className="text-slate-600 max-w-2xl mx-auto text-sm md:text-base font-light">
+                {methodologyConfig.description}
+              </p>
+            )}
+            <div className="w-16 h-1 bg-ocean-accent mx-auto rounded-full mt-4" />
+          </div>
+        )}
 
         {/* Structured Grid boxes */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {skills.map((cat, idx) => (
-            <div
-              key={idx}
-              className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex flex-col group"
-            >
-              <div className="w-11 h-11 bg-ocean-light rounded-lg flex items-center justify-center text-ocean-accent mb-5 group-hover:bg-ocean-accent group-hover:text-white transition-colors duration-300">
-                {renderCategoryIcon(idx, cat.category)}
+        {hasSkills && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {skills.filter(cat => cat && Array.isArray(cat.skills) && cat.skills.length > 0).map((cat, idx) => (
+              <div
+                key={idx}
+                className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex flex-col group"
+              >
+                <div className="w-11 h-11 bg-ocean-light rounded-lg flex items-center justify-center text-ocean-accent mb-5 group-hover:bg-ocean-accent group-hover:text-white transition-colors duration-300">
+                  {renderCategoryIcon(idx, cat.category)}
+                </div>
+                
+                <h3 className="font-bold text-slate-800 text-base mb-4">
+                  {formatAmpersand(cat.category)}
+                </h3>
+                
+                <ul className="space-y-2 flex-grow">
+                  {cat.skills.map((skill, sIdx) => (
+                    <li key={sIdx} className="flex items-center text-slate-600 text-sm">
+                      <span className="w-1.5 h-1.5 bg-ocean-accent rounded-full mr-2.5 flex-shrink-0" />
+                      <span>{skill}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              
-              <h3 className="font-bold text-slate-800 text-base mb-4">
-                {formatAmpersand(cat.category)}
-              </h3>
-              
-              <ul className="space-y-2 flex-grow">
-                {cat.skills.map((skill, sIdx) => (
-                  <li key={sIdx} className="flex items-center text-slate-600 text-sm">
-                    <span className="w-1.5 h-1.5 bg-ocean-accent rounded-full mr-2.5 flex-shrink-0" />
-                    <span>{skill}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Workflow modernize highlights panel banner */}
         <div className="mt-16 bg-slate-900 rounded-2xl p-8 md:p-12 text-center text-white relative overflow-hidden shadow-xl" id="research-workflow-highlight">

@@ -15,22 +15,28 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
   const [isActivitiesModalOpen, setIsActivitiesModalOpen] = useState(false);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
 
+  const filteredRecentActivities = useMemo(() => {
+    return (recentActivities || []).filter(act => act && act.mediaUrl && !act.mediaUrl.includes('pexels.com'));
+  }, [recentActivities]);
+
   // Validate slideshow photos (fallback if empty)
   const images = useMemo(() => {
-    const arr = Array.isArray(hero.galleryImages) ? hero.galleryImages.filter(Boolean) : [];
-    const fallback = hero.imageUrl || "https://picsum.photos/400/400?grayscale";
-    const result = arr.length > 0 ? [...arr] : [fallback];
-    while (result.length < 5) result.push(result[result.length - 1] || fallback);
-    return result.slice(0, 5).map(url => resolveMediaLink(url, 'image'));
+    const arr = Array.isArray(hero.galleryImages)
+      ? hero.galleryImages.filter(url => url && !url.includes('pexels.com') && !url.includes('picsum.photos'))
+      : [];
+    const hasImage = hero.imageUrl && !hero.imageUrl.includes('pexels.com') && !hero.imageUrl.includes('picsum.photos');
+    const result = arr.length > 0 ? [...arr] : (hasImage ? [hero.imageUrl] : []);
+    return result.map(url => resolveMediaLink(url, 'image'));
   }, [hero.galleryImages, hero.imageUrl]);
 
   // Validate slideshow videos (fallback if empty)
   const videos = useMemo(() => {
-    const arr = Array.isArray(hero.videoUrls) ? hero.videoUrls.filter(Boolean) : [];
-    const fallback = hero.videoUrl || "https://videos.pexels.com/video-files/3576686/3576686-hd_1920_1080_30fps.mp4";
-    const result = arr.length > 0 ? [...arr] : [fallback];
-    while (result.length < 5) result.push(result[result.length - 1] || fallback);
-    return result.slice(0, 5).map(url => resolveMediaLink(url, 'video'));
+    const arr = Array.isArray(hero.videoUrls)
+      ? hero.videoUrls.filter(url => url && !url.includes('pexels.com'))
+      : [];
+    const hasVideo = hero.videoUrl && !hero.videoUrl.includes('pexels.com');
+    const result = arr.length > 0 ? [...arr] : (hasVideo ? [hero.videoUrl] : []);
+    return result.map(url => resolveMediaLink(url, 'video'));
   }, [hero.videoUrls, hero.videoUrl]);
 
   // Cycle image slideshow (every 6 seconds for a total of 30 seconds)
@@ -85,51 +91,49 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden bg-slate-900/10" id="hero-section">
       {/* Dynamic Video background flow */}
-      <div className="absolute inset-0 z-0 overflow-hidden">
-        {videos.map((resolved, idx) => {
-          const isActive = idx === activeVideoIdx;
+      <div className="absolute inset-0 z-0 overflow-hidden bg-slate-950">
+        {videos.length > 0 ? (
+          videos.map((resolved, idx) => {
+            const isActive = idx === activeVideoIdx;
 
-          if (resolved.isEmbeddable) {
-            if (!isActive) return null; // Avoid running multiple remote iFrame media players
-            let embedSrc = resolved.embedUrl;
-            if (resolved.source === 'youtube') {
-              embedSrc = `${resolved.embedUrl}&autoplay=1&mute=1&playlist=${resolved.embedUrl.split('/').pop()?.split('?')[0]}&controls=0&loop=1&playsinline=1&showinfo=0&rel=0`;
-            } else if (resolved.source === 'vimeo') {
-              embedSrc = `${resolved.embedUrl}&autoplay=1&muted=1&loop=1&background=1`;
-            }
-            return (
-              <iframe
-                key={`${resolved.embedUrl}-${idx}`}
-                src={embedSrc}
-                className="absolute inset-0 w-full h-full object-cover scale-105 pointer-events-none transition-opacity duration-300 border-none animate-fade-in"
-                style={{ width: '100vw', height: '100vh', border: '0' }}
-                allow="autoplay; fullscreen"
-              />
-            );
-          } else {
-            return (
-              <video
-                ref={(el) => { videoRefs.current[idx] = el; }}
-                key={`${resolved.directUrl}-${idx}`}
-                src={resolved.directUrl}
-                autoPlay={isActive}
-                muted
-                loop
-                playsInline
-                preload="auto"
-                className={`absolute inset-0 w-full h-full object-cover scale-105 transition-opacity duration-300 ${
-                  isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
-                }`}
-              >
-                <img
-                  src="https://images.pexels.com/photos/1482193/pexels-photo-1482193.jpeg"
-                  alt="Ocean coast fallback"
-                  className="w-full h-full object-cover"
+            if (resolved.isEmbeddable) {
+              if (!isActive) return null; // Avoid running multiple remote iFrame media players
+              let embedSrc = resolved.embedUrl;
+              if (resolved.source === 'youtube') {
+                embedSrc = `${resolved.embedUrl}&autoplay=1&mute=1&playlist=${resolved.embedUrl.split('/').pop()?.split('?')[0]}&controls=0&loop=1&playsinline=1&showinfo=0&rel=0`;
+              } else if (resolved.source === 'vimeo') {
+                embedSrc = `${resolved.embedUrl}&autoplay=1&muted=1&loop=1&background=1`;
+              }
+              return (
+                <iframe
+                  key={`${resolved.embedUrl}-${idx}`}
+                  src={embedSrc}
+                  className="absolute inset-0 w-full h-full object-cover scale-105 pointer-events-none transition-opacity duration-300 border-none animate-fade-in"
+                  style={{ width: '100vw', height: '100vh', border: '0' }}
+                  allow="autoplay; fullscreen"
                 />
-              </video>
-            );
-          }
-        })}
+              );
+            } else {
+              return (
+                <video
+                  ref={(el) => { videoRefs.current[idx] = el; }}
+                  key={`${resolved.directUrl}-${idx}`}
+                  src={resolved.directUrl}
+                  autoPlay={isActive}
+                  muted
+                  loop
+                  playsInline
+                  preload="auto"
+                  className={`absolute inset-0 w-full h-full object-cover scale-105 transition-opacity duration-300 ${
+                    isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                  }`}
+                />
+              );
+            }
+          })
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-ocean-dark" />
+        )}
         {/* 10% black and blue mixed themed overlays */}
         <div className="absolute inset-0 bg-black/10" />
         <div className="absolute inset-0 bg-ocean-dark/30 mix-blend-overlay" />
@@ -140,7 +144,7 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full pt-32 pb-24">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-12">
           {/* Main textual presentation */}
-          <div className="flex-1 text-center md:text-left">
+          <div className={`flex-1 ${images.length === 0 ? 'text-center max-w-3xl mx-auto' : 'text-center md:text-left'}`}>
             <h2 className="text-amber-400 font-bold tracking-wider uppercase text-sm mb-3 drop-shadow-md">
               {hero.subtitle}
             </h2>
@@ -160,11 +164,15 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
               </p>
             </div>
 
-            <p className="text-base md:text-lg text-slate-200 max-w-2xl mx-auto md:mx-0 mb-10 leading-relaxed drop-shadow-sm font-light">
-              {hero.summary}
-            </p>
+            {hero.summary && (
+              <p className={`text-base md:text-lg text-slate-200 max-w-2xl mb-10 leading-relaxed drop-shadow-sm font-light ${
+                images.length === 0 ? 'mx-auto' : 'mx-auto md:mx-0'
+              }`}>
+                {hero.summary}
+              </p>
+            )}
 
-            <div className="flex flex-wrap justify-center md:justify-start gap-4">
+            <div className={`flex flex-wrap gap-4 ${images.length === 0 ? 'justify-center' : 'justify-center md:justify-start'}`}>
               <button
                 type="button"
                 onClick={() => setIsActivitiesModalOpen(true)}
@@ -198,32 +206,34 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
           </div>
 
           {/* Right Presentation Picture sequencing */}
-          <div className="flex flex-col items-center flex-shrink-0 relative group w-full md:w-auto mt-8 md:mt-0">
-            <div className="w-64 h-80 md:w-80 md:h-[26rem] relative">
-              {/* Blur back glow */}
-              <div className="absolute inset-0 bg-ocean-accent/25 rounded-2xl blur-3xl transform translate-x-4 translate-y-4 group-hover:translate-x-2 group-hover:translate-y-2 transition-transform duration-500" />
-              <img
-                src={images[activeImageIdx]?.displayUrl}
-                alt={hero.name}
-                className="w-full h-full object-cover rounded-2xl border-4 border-white/25 shadow-2xl relative z-10 duration-700"
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://placehold.co/400x500/0f172a/94a3b8?text=Research+Media';
-                }}
-              />
+          {images.length > 0 && (
+            <div className="flex flex-col items-center flex-shrink-0 relative group w-full md:w-auto mt-8 md:mt-0">
+              <div className="w-64 h-80 md:w-80 md:h-[26rem] relative">
+                {/* Blur back glow */}
+                <div className="absolute inset-0 bg-ocean-accent/25 rounded-2xl blur-3xl transform translate-x-4 translate-y-4 group-hover:translate-x-2 group-hover:translate-y-2 transition-transform duration-500" />
+                <img
+                  src={images[activeImageIdx]?.displayUrl}
+                  alt={hero.name}
+                  className="w-full h-full object-cover rounded-2xl border-4 border-white/25 shadow-2xl relative z-10 duration-700"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://placehold.co/400x500/0f172a/94a3b8?text=Research+Media';
+                  }}
+                />
+              </div>
+              
+              {/* Realtime collaboration badge */}
+              <div className="mt-6 bg-white/95 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-slate-100 flex items-center gap-2.5 z-20">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Open to Collaboration
+                </span>
+              </div>
             </div>
-            
-            {/* Realtime collaboration badge */}
-            <div className="mt-6 bg-white/95 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-slate-100 flex items-center gap-2.5 z-20">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-              </span>
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                Open to Collaboration
-              </span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -246,11 +256,11 @@ export default function Hero({ hero, recentActivities }: HeroProps) {
             </div>
 
             <div className="p-6 overflow-y-auto space-y-6">
-              {recentActivities.length === 0 ? (
+              {filteredRecentActivities.length === 0 ? (
                 <p className="text-center py-10 text-slate-400 italic">No recent activities updated yet.</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {recentActivities.map((act) => {
+                  {filteredRecentActivities.map((act) => {
                     const resolvedAct = resolveMediaLink(act.mediaUrl, act.mediaType);
                     return (
                       <article key={act.id} className="border border-slate-100 rounded-xl overflow-hidden bg-slate-50 flex flex-col shadow-sm">

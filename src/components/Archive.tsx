@@ -16,26 +16,38 @@ export default function Archive({ archive }: ArchiveProps) {
   } | null>(null);
 
   // Fallback initial values if the section isn't populated or updated yet
-  const title = archive?.title || "Archive & Field Records";
-  const description = archive?.description || "An extensive repository of field logs, expedition photos, and laboratory reference material captured during active coastal surveys.";
-  const items = archive?.items || [];
+  const title = archive?.title || "";
+  const description = archive?.description || "";
+  const items = (archive?.items || []).filter(item => item && item.mediaUrl && !item.mediaUrl.includes('pexels.com'));
+
+  const hasTitle = !!title.trim();
+  const hasDescription = !!description.trim();
+  const hasItems = Array.isArray(items) && items.length > 0;
+
+  if (!hasTitle && !hasDescription && !hasItems) return null;
 
   return (
     <section id="archive" className="py-20 bg-slate-50 border-t border-b border-slate-200/50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Section title header */}
-        <div className="text-center mb-16">
-          <h2 className="text-3xl font-serif font-bold text-ocean-dark mb-4">
-            {formatAmpersand(title)}
-          </h2>
-          <p className="text-slate-600 max-w-2xl mx-auto text-sm md:text-base font-light">
-            {description}
-          </p>
-          <div className="w-16 h-1 bg-ocean-accent mx-auto rounded-full mt-4" />
-        </div>
+        {(hasTitle || hasDescription) && (
+          <div className="text-center mb-16">
+            {hasTitle && (
+              <h2 className="text-3xl font-serif font-bold text-ocean-dark mb-4">
+                {formatAmpersand(title)}
+              </h2>
+            )}
+            {hasDescription && (
+              <p className="text-slate-600 max-w-2xl mx-auto text-sm md:text-base font-light">
+                {description}
+              </p>
+            )}
+            <div className="w-16 h-1 bg-ocean-accent mx-auto rounded-full mt-4" />
+          </div>
+        )}
 
-        {items.length === 0 ? (
+        {!hasItems ? (
           <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 p-8 shadow-sm max-w-lg mx-auto">
             <ImageIcon className="mx-auto text-slate-300 mb-3 h-10 w-10 animate-pulse" />
             <p className="text-sm font-medium text-slate-500">The archive is currently being populated.</p>

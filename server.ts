@@ -10,6 +10,98 @@ async function startServer() {
   const DATA_FILE_PATH = path.join(process.cwd(), "site_data_store.json");
   const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 
+  // Helper to recursively merge codebase data into stored data, preferring code fields when updated
+  const smartMergeCodeFirst = (stored: any, codeMaster: any): any => {
+    if (typeof stored !== typeof codeMaster || stored === null || codeMaster === null) {
+      return codeMaster;
+    }
+
+    if (Array.isArray(codeMaster)) {
+      const mergedArray = [...stored];
+      for (const codeItem of codeMaster) {
+        if (codeItem && typeof codeItem === 'object' && codeItem.id) {
+          const storedIndex = mergedArray.findIndex((item: any) => item && item.id === codeItem.id);
+          if (storedIndex === -1) {
+            mergedArray.push(codeItem);
+          } else {
+            mergedArray[storedIndex] = smartMergeCodeFirst(mergedArray[storedIndex], codeItem);
+          }
+        } else if (typeof codeItem !== 'object') {
+          if (!mergedArray.includes(codeItem)) {
+            mergedArray.push(codeItem);
+          }
+        }
+      }
+      return mergedArray;
+    }
+
+    if (typeof codeMaster === 'object') {
+      const mergedObj = { ...stored };
+      for (const key in codeMaster) {
+        if (!(key in stored)) {
+          mergedObj[key] = codeMaster[key];
+        } else {
+          mergedObj[key] = smartMergeCodeFirst(stored[key], codeMaster[key]);
+        }
+      }
+      return mergedObj;
+    }
+
+    return codeMaster;
+  };
+
+  // Synchronize stored database file with the newly built/deployed codebase data if needed
+  const syncOnStartup = async () => {
+    try {
+      const buildTimestampPath = path.join(process.cwd(), "dist", "build_timestamp.txt");
+      let buildTimestamp = "";
+      if (fs.existsSync(buildTimestampPath)) {
+        buildTimestamp = fs.readFileSync(buildTimestampPath, "utf-8").trim();
+      }
+
+      if (!buildTimestamp) {
+        console.log("[Sync] No build timestamp found yet. Skipping startup sync.");
+        return;
+      }
+
+      console.log(`[Sync] Detected build timestamp: ${buildTimestamp}`);
+
+      let storedData: any = null;
+      if (fs.existsSync(DATA_FILE_PATH)) {
+        try {
+          const fileContent = fs.readFileSync(DATA_FILE_PATH, "utf-8");
+          storedData = JSON.parse(fileContent);
+        } catch (e) {
+          console.error("[Sync] Errant site_data_store.json file. Rebuilding from baseline.");
+        }
+      }
+
+      if (!storedData) {
+        console.log("[Sync] Creating fresh site_data_store.json with build tag.");
+        const baseline = { ...INITIAL_DATA, lastPublishedBuildTimestamp: buildTimestamp };
+        fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(baseline, null, 2), "utf-8");
+        return;
+      }
+
+      const storedTimestamp = storedData.lastPublishedBuildTimestamp || "";
+      if (storedTimestamp !== buildTimestamp) {
+        console.log(`[Sync] Build mismatch! Stored tag: "${storedTimestamp}", Brand-new build: "${buildTimestamp}". Migrating code changes.`);
+        const mergedData = smartMergeCodeFirst(storedData, INITIAL_DATA);
+        mergedData.lastPublishedBuildTimestamp = buildTimestamp;
+        
+        fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(mergedData, null, 2), "utf-8");
+        console.log("[Sync] Successfully merged newly published code changes cleanly.");
+      } else {
+        console.log("[Sync] App state is fully aligned with published build.");
+      }
+    } catch (err) {
+      console.error("[Sync] Error checking database sync on boot:", err);
+    }
+  };
+
+  // Perform codebase sync immediately on boot
+  await syncOnStartup();
+
   // Leverage generous limit configs to allow saving large base64 media packets (up to 30MB limit each)
   app.use(express.json({ limit: "200mb" }));
   app.use(express.urlencoded({ limit: "200mb", extended: true }));
@@ -108,6 +200,9 @@ async function startServer() {
 
   // API Endpoints for site customization
   app.get("/api/site-data", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     const customUrl = req.query.externalUrl as string | undefined;
     const currentData = await loadSiteData(customUrl);
     res.json(currentData);
@@ -199,8 +294,28 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    
+    // Serve static assets with standard caching except for index.html files
+    app.use(express.static(distPath, {
+      etag: true,
+      lastModified: true,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith("index.html") || filePath.endsWith("index.htm")) {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        } else {
+          // JS, CSS, and other hashed client-side bundled static resources are completely safe to cache immutably
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      }
+    }));
+
+    // Fallback wildcards for SPA must never be cached so users fetch latest client index bundle immediately
     app.get("*", (req, res) => {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
